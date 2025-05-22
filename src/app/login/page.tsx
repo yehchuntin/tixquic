@@ -34,16 +34,13 @@ export default function LoginPage() {
           <AppLogo className="mx-auto h-12 w-12 text-primary mb-4" />
           <CardTitle className="text-3xl font-bold">Welcome to TicketSwift</CardTitle>
           <CardDescription className="pt-2">
-            Sign in to access your dashboard and features.
+            Sign in with Google to access your dashboard and features.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center space-y-6">
-          <p className="text-sm text-muted-foreground">
-            Click the button below to simulate login.
-          </p>
           <AuthButton />
            <p className="text-xs text-muted-foreground px-4 text-center">
-            For demonstration, enter an email. If it contains "admin" (e.g., admin@example.com), you'll get admin privileges.
+            Note: If your Google account email contains "admin", you'll be granted admin privileges in this app.
           </p>
         </CardContent>
       </Card>

@@ -13,39 +13,35 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogIn, LogOut, UserCircle, Settings } from "lucide-react";
+import { LogOut, UserCircle, Settings, Chrome } from "lucide-react"; // Using Chrome for Google icon
+import { LoadingSpinner } from "@/components/shared/loading-spinner";
 
 export function AuthButton() {
-  const { user, setUser, isAdmin, setIsAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, loginWithGoogle, logout } = useAuth();
   const router = useRouter();
 
-  const handleLogin = () => {
-    // Mock login: In a real app, this would redirect to a login page or open a modal
-    // For this mock, we'll set a dummy user.
-    // Prompt for email to determine if admin
-    const email = prompt("Enter your email (e.g., user@example.com or admin@example.com):");
-    if (email) {
-      const mockUser = {
-        uid: "mock-uid-" + Date.now(),
-        email: email,
-        displayName: email.split("@")[0],
-        photoURL: `https://i.pravatar.cc/150?u=${email}`, // Placeholder avatar
-      } as any; // Casting to any to satisfy User type partially
-      setUser(mockUser);
-      if (email.includes("admin")) {
-        setIsAdmin(true);
-      }
+  const handleLogin = async () => {
+    try {
+        await loginWithGoogle();
+        // router.push('/') // Optionally redirect after login attempt
+    } catch (error) {
+        console.error("Login failed:", error);
+        // Handle login error (e.g., display toast)
     }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setIsAdmin(false);
-    router.push("/"); // Redirect to home after logout
+  const handleLogout = async () => {
+    try {
+        await logout();
+        router.push("/"); // Redirect to home after logout
+    } catch (error) {
+        console.error("Logout failed:", error);
+        // Handle logout error
+    }
   };
 
   if (loading) {
-    return <Button variant="outline" disabled>Loading...</Button>;
+    return <Button variant="outline" disabled className="w-[160px]"><LoadingSpinner size={16} className="mr-2"/>Loading...</Button>;
   }
 
   if (user) {
@@ -79,10 +75,11 @@ export function AuthButton() {
               <span>Admin Panel</span>
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => router.push("/loyalty")}>
+          {/* Profile link can be added here if a profile page is created */}
+          {/* <DropdownMenuItem onClick={() => router.push("/how-to-use#loyalty-info")}>
             <UserCircle className="mr-2 h-4 w-4" />
             <span>Profile</span>
-          </DropdownMenuItem>
+          </DropdownMenuItem> */}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout}>
             <LogOut className="mr-2 h-4 w-4" />
@@ -94,9 +91,9 @@ export function AuthButton() {
   }
 
   return (
-    <Button onClick={handleLogin} variant="outline">
-      <LogIn className="mr-2 h-4 w-4" />
-      Login
+    <Button onClick={handleLogin} variant="outline" className="w-[160px]">
+      <Chrome className="mr-2 h-4 w-4" />
+      Login with Google
     </Button>
   );
 }

@@ -2,68 +2,68 @@
 "use client";
 
 import type { User } from "firebase/auth";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
+import type { ReactNode } from "react";
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { auth as firebaseAuth } from "@/lib/firebase"; // Import initialized auth
 
 interface AuthContextType {
   user: User | null;
-  setUser: Dispatch<SetStateAction<User | null>>;
   loading: boolean;
-  isAdmin: boolean; // Add isAdmin state
-  setIsAdmin: Dispatch<SetStateAction<boolean>>;
+  isAdmin: boolean;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false); // Mock admin state
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock authentication check
-    const mockUser = localStorage.getItem("mockUser");
-    if (mockUser) {
-      try {
-        const parsedUser = JSON.parse(mockUser);
-        setUser(parsedUser.user);
-        setIsAdmin(parsedUser.isAdmin || false);
-      } catch (e) {
-        localStorage.removeItem("mockUser");
-      }
-    }
-    setLoading(false);
-  }, []);
-
-  const handleSetUser = (newUser: User | null | ((prevState: User | null) => User | null)) => {
-    setUser(currentUser => {
-      const updatedUser = typeof newUser === 'function' ? newUser(currentUser) : newUser;
-      if (updatedUser) {
-        // For mock purposes, if user's email contains 'admin', set as admin
-        const resolvedIsAdmin = updatedUser.email?.includes("admin") || false;
-        localStorage.setItem("mockUser", JSON.stringify({ user: updatedUser, isAdmin: resolvedIsAdmin }));
-        setIsAdmin(resolvedIsAdmin);
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser && currentUser.email) {
+        setIsAdmin(currentUser.email.includes("admin"));
       } else {
-        localStorage.removeItem("mockUser");
         setIsAdmin(false);
       }
-      return updatedUser;
+      setLoading(false);
     });
-  };
-  
-  const handleSetIsAdmin = (newIsAdmin: boolean | ((prevState: boolean) => boolean)) => {
-    setIsAdmin(currentIsAdmin => {
-        const updatedIsAdmin = typeof newIsAdmin === 'function' ? newIsAdmin(currentIsAdmin) : newIsAdmin;
-        if (user) {
-            localStorage.setItem("mockUser", JSON.stringify({ user, isAdmin: updatedIsAdmin }));
-        }
-        return updatedIsAdmin;
-    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
+
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      setLoading(true); // Indicate loading state
+      await signInWithPopup(firebaseAuth, provider);
+      // onAuthStateChanged will handle setting user, isAdmin, and final loading state
+    } catch (error) {
+      console.error("Error during Google Sign-In: ", error);
+      // Potentially show a toast message to the user
+      setLoading(false); // Reset loading state on error
+    }
   };
 
+  const logout = async () => {
+    try {
+      setLoading(true); // Indicate loading state
+      await signOut(firebaseAuth);
+      // onAuthStateChanged will handle setting user to null, isAdmin to false, and final loading state
+    } catch (error) {
+      console.error("Error during Sign-Out: ", error);
+      // Potentially show a toast message to the user
+      setLoading(false); // Reset loading state on error
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser: handleSetUser, loading, isAdmin, setIsAdmin: handleSetIsAdmin }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );
