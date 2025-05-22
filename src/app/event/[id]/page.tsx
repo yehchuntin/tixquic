@@ -2,7 +2,7 @@
 "use client"; // Make this a Client Component
 
 import type { Metadata, ResolvingMetadata } from 'next';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { type TicketEvent } from '@/lib/constants';
 import Image from 'next/image';
@@ -37,7 +37,6 @@ interface EventDetailPageProps {
 //     description: event.description || `Details for ${event.name}`,
 //   };
 // }
-// For simplicity in a Client Component, we might set title dynamically via useEffect or skip generateMetadata if not critical
 
 const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } => {
   const today = new Date();
@@ -71,11 +70,19 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
         if (eventSnap.exists()) {
           const data = eventSnap.data();
+          // Convert Firestore Timestamps to YYYY-MM-DD strings
+          const onSaleDateString = data.onSaleDate instanceof Timestamp 
+            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
+            : data.onSaleDate;
+          const endDateString = data.endDate instanceof Timestamp 
+            ? data.endDate.toDate().toISOString().split('T')[0] 
+            : data.endDate;
+
           const fetchedEvent = { 
             id: eventSnap.id, 
             ...data,
-            onSaleDate: data.onSaleDate?.toDate ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
-            endDate: data.endDate?.toDate ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+            onSaleDate: onSaleDateString,
+            endDate: endDateString,
           } as TicketEvent;
           setEvent(fetchedEvent);
           setStatus(getEventDisplayStatus(fetchedEvent));
@@ -142,12 +149,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     if (flowStep === 'initial' && status.isActionable) {
       setFlowStep('verification');
       // In a real app, you might trigger an API call or some preparation here.
-      // For now, we just change the button text.
     } else if (flowStep === 'verification' && status.isActionable) {
       // This is where you would initiate the actual verification number process
-      // For example, calling a Genkit flow.
       alert("Initiating verification number process... (placeholder)");
-      // You might want to disable the button here or show a loading state.
     }
   };
 
@@ -168,8 +172,8 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
             <Image
               src={event.imageUrl}
               alt={event.name}
-              layout="fill"
-              objectFit="cover"
+              fill // Use fill instead of layout="fill"
+              style={{ objectFit: "cover" }} // Use style for objectFit
               data-ai-hint={event.dataAiHint || "event highlight"}
               priority 
             />
@@ -275,4 +279,3 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     </div>
   );
 }
-
