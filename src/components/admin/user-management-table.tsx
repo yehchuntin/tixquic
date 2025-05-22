@@ -14,12 +14,13 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Users, ShieldCheck, ShieldOff, AlertTriangle } from "lucide-react";
+import { Users, ShieldCheck, ShieldOff, AlertTriangle as AlertTriangleIcon } from "lucide-react"; // Renamed AlertTriangle
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"; // Added import
 
 interface MockUser {
   id: string;
@@ -64,7 +65,6 @@ export function UserManagementTable() {
       prevUsers.map((user) => {
         if (user.id === userId) {
           // Prevent current admin from revoking their own mock status if they are the one in AuthContext
-          // This is a simplified check for the prototype
           if (currentUser && user.email === currentUser.email && user.isMockAdmin && isCurrentUserAdmin) {
              toast({
               title: "Action Restricted",
@@ -76,7 +76,7 @@ export function UserManagementTable() {
           const newAdminStatus = !user.isMockAdmin;
           toast({
             title: "User Updated (Mock)",
-            description: `${user.name}'s admin status ${newAdminStatus ? "granted" : "revoked"}. (This is a visual mock only)`,
+            description: `${user.name}'s admin status ${newAdminStatus ? "granted" : "revoked"}. (This is a visual mock only and does not affect login permissions)`,
           });
           return { ...user, isMockAdmin: newAdminStatus };
         }
@@ -92,7 +92,7 @@ export function UserManagementTable() {
   if (!isCurrentUserAdmin) {
      return (
         <div className="flex flex-col items-center justify-center h-64 text-center p-4">
-            <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+            <AlertTriangleIcon className="h-16 w-16 text-destructive mb-4" />
             <h2 className="text-2xl font-semibold text-destructive mb-2">Access Denied</h2>
             <p className="text-muted-foreground">You do not have administrative privileges to manage users.</p>
             <Button onClick={() => router.push('/')} className="mt-6">Go to Dashboard</Button>
@@ -104,21 +104,33 @@ export function UserManagementTable() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold flex items-center gap-2">
-          <Users className="h-8 w-8 text-primary" /> User Management
+          <Users className="h-8 w-8 text-primary" /> User Management (Simulation)
         </h2>
       </div>
         <CardDescription>
-          Manage user roles and permissions. Note: Admin status changes on this page are for demonstration and do not affect actual login permissions in this prototype. Actual admin status is determined by email during login.
+          Manage user roles and permissions. <strong className="text-primary">This is a visual simulation.</strong> Actual admin status for login is determined if the user's email contains &quot;admin&quot;. Changes here do not affect login permissions.
         </CardDescription>
+
+      <Alert variant="default" className="mt-6 bg-secondary/50 border-primary/50">
+          <AlertTriangleIcon className="h-4 w-4 text-primary" />
+          <AlertTitle className="font-semibold">Prototype Feature: Simulated Admin Management</AlertTitle>
+          <AlertDescription>
+            The admin statuses displayed and toggled on this page are for <strong className="text-foreground">demonstration purposes only</strong>. 
+            They simulate how a user management list might look and behave.
+            <br />
+            In this prototype, actual admin privileges during login are granted if the user's email address contains the word &quot;admin&quot; (e.g., <code>admin@example.com</code>). 
+            Toggling switches here <strong className="text-destructive">will not</strong> change a user's ability to log in as an admin.
+          </AlertDescription>
+        </Alert>
 
       <Card className="shadow-lg">
         <Table>
-          <TableCaption>A list of registered users.</TableCaption>
+          <TableCaption>A list of registered users (mock data).</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead className="text-center">Admin Status (Mock)</TableHead>
+              <TableHead className="text-center">Admin Status (Simulated)</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -141,7 +153,7 @@ export function UserManagementTable() {
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end space-x-2">
                     <Label htmlFor={`admin-switch-${user.id}`} className="text-sm">
-                      {user.isMockAdmin ? "Revoke Admin" : "Grant Admin"}
+                      {user.isMockAdmin ? "Revoke Admin (Simulated)" : "Grant Admin (Simulated)"}
                     </Label>
                     <Switch
                       id={`admin-switch-${user.id}`}
@@ -162,13 +174,6 @@ export function UserManagementTable() {
             </div>
         )}
       </Card>
-       <Alert variant="default" className="mt-6 bg-secondary/50">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Prototype Limitation</AlertTitle>
-          <AlertDescription>
-            Changes to admin status on this page are for demonstration purposes only and do not affect the actual authentication or authorization logic of the application. In this prototype, a user is considered an admin if their email address contains &quot;admin&quot;.
-          </AlertDescription>
-        </Alert>
     </div>
   );
 }
