@@ -20,11 +20,26 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Rules for user event verifications
-    match /userEventVerifications/{docId} {
+    // Rules for 'userEventVerifications' collection
+    match /userEventVerifications/{verificationId} {
+      // A user can read their own verification records
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      // No updates or deletes by clients for now to keep it simple
+
+      // A user can create their own verification record if:
+      // 1. They are authenticated.
+      // 2. The userId in the document being created matches their authenticated UID.
+      // 3. The document being created contains an eventId.
+      // 4. The document being created contains a verificationCode.
+      // 5. The document being created contains an eventName.
+      // 6. The document being created contains a purchaseDate (which should be a serverTimestamp).
+      allow create: if request.auth != null &&
+                      request.auth.uid == request.resource.data.userId &&
+                      request.resource.data.eventId is string &&
+                      request.resource.data.verificationCode is string &&
+                      request.resource.data.eventName is string &&
+                      request.resource.data.purchaseDate == request.time; // Ensure purchaseDate is set by server
+
+      // Disallow client-side updates and deletes on verification records for now
       allow update, delete: if false;
     }
   }
