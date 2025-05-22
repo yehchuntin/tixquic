@@ -12,9 +12,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle, Loader2, Settings2 } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react'; 
+import { useEffect, useState, FormEvent } from 'react'; 
 import { LoadingSpinner } from '@/components/shared/loading-spinner'; 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/auth-context';
@@ -61,14 +63,19 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [showVerificationCode, setShowVerificationCode] = useState(false);
   const [hasAlreadyPurchased, setHasAlreadyPurchased] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // For Firestore write operations
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingPurchaseStatus, setLoadingPurchaseStatus] = useState(true);
+
+  const [isPreferenceDialogOpen, setIsPreferenceDialogOpen] = useState(false);
+  const [ticketCount, setTicketCount] = useState("1");
+  const [sessionPreference, setSessionPreference] = useState("");
+  const [seatPreferenceOrder, setSeatPreferenceOrder] = useState("");
 
 
   useEffect(() => {
     const fetchEvent = async () => {
       setLoadingEvent(true);
-      setLoadingPurchaseStatus(true); // Reset purchase status loading
+      setLoadingPurchaseStatus(true);
       try {
         const eventDocRef = doc(db, 'events', params.id);
         const eventSnap = await getDoc(eventDocRef);
@@ -111,7 +118,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
   useEffect(() => {
     if (!event || !user || authLoading) {
-      if (!authLoading && event) setLoadingPurchaseStatus(false); // if no user, no purchase to check
+      if (!authLoading && event) setLoadingPurchaseStatus(false);
       return;
     }
 
@@ -129,6 +136,10 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
         if (!querySnapshot.empty) {
           const purchaseDoc = querySnapshot.docs[0].data();
           setVerificationCode(purchaseDoc.verificationCode);
+          // Optionally load preferences if needed for display, though not strictly required by current UI
+          // setTicketCount(purchaseDoc.ticketCount?.toString() || "1");
+          // setSessionPreference(purchaseDoc.sessionPreference || "");
+          // setSeatPreferenceOrder(purchaseDoc.seatPreferenceOrder || "");
           setHasAlreadyPurchased(true);
           setFlowStep('purchased');
         } else {
@@ -139,7 +150,6 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
       } catch (error) {
         console.error("Error checking purchase status:", error);
         toast({ title: "Error", description: "Could not verify purchase status.", variant: "destructive" });
-        // Keep UI as if not purchased to allow trying again
         setHasAlreadyPurchased(false);
         setFlowStep('initial');
       } finally {
@@ -160,10 +170,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     }
   }, [event, loadingEvent]);
 
-  // Simulate payment and then mark as purchased
   useEffect(() => {
     if (flowStep === 'payment') {
-      setIsSubmitting(true); // Keep button disabled during payment simulation
+      setIsSubmitting(true);
       setTimeout(() => {
         toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
         setFlowStep('purchased'); 
@@ -173,7 +182,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   }, [flowStep, toast]);
 
 
-  const handleTicketAction = async () => {
+  const handleInitialTicketAction = () => {
     if (!user) {
         toast({ title: "Authentication Required", description: "Please log in to get tickets.", variant: "destructive"});
         return;
@@ -181,8 +190,25 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     if (!event || !status || !status.isActionable || hasAlreadyPurchased || flowStep !== 'initial') {
       return;
     }
+    // Reset preferences for new entry
+    setTicketCount("1");
+    setSessionPreference("");
+    setSeatPreferenceOrder("");
+    setIsPreferenceDialogOpen(true);
+  };
+
+  const handlePreferenceFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!user || !event) return;
+
+    const parsedTicketCount = parseInt(ticketCount, 10);
+    if (isNaN(parsedTicketCount) || parsedTicketCount <= 0) {
+      toast({ title: "Invalid Input", description: "Ticket count must be a positive number.", variant: "destructive" });
+      return;
+    }
 
     setIsSubmitting(true);
+    setIsPreferenceDialogOpen(false);
     const newCode = generateRandomAlphanumeric(16);
 
     try {
@@ -191,20 +217,24 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
         eventId: event.id,
         eventName: event.name,
         verificationCode: newCode,
+        ticketCount: parsedTicketCount,
+        sessionPreference: sessionPreference.trim(),
+        seatPreferenceOrder: seatPreferenceOrder.trim(),
         purchaseDate: serverTimestamp(),
       });
       
       setVerificationCode(newCode);
-      setHasAlreadyPurchased(true); // Optimistically set
-      setFlowStep('payment'); // This will trigger the payment simulation useEffect
-      toast({ title: "Verification Code Generated!", description: "Proceeding to simulated payment." });
-      // setIsSubmitting will be handled by the payment useEffect or reset on error here
+      setHasAlreadyPurchased(true);
+      setFlowStep('payment'); 
+      toast({ title: "Preferences Saved & Code Generated!", description: "Proceeding to simulated payment." });
     } catch (error) {
-      console.error("Error saving verification code:", error);
-      toast({ title: "Error", description: "Could not save your verification code. Please try again.", variant: "destructive" });
-      setIsSubmitting(false);
+      console.error("Error saving verification code and preferences:", error);
+      toast({ title: "Error", description: "Could not save your preferences. Please try again.", variant: "destructive" });
+      setIsSubmitting(false); // Reset submitting state on error
     }
+    // setIsSubmitting will be handled by the payment useEffect or reset on error here
   };
+
 
   const copyToClipboard = () => {
     if (verificationCode) {
@@ -255,8 +285,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     if (loadingPurchaseStatus) return "Checking Status...";
     if (flowStep === 'purchased' || hasAlreadyPurchased) return "Code Obtained";
     if (flowStep === 'payment' || isSubmitting) return "Processing...";
-    // if (flowStep === 'initial') return "Get Tickets Now"; // original
-    return "Get Tickets Now"; // Simplified, as 'initial' is the only other state for an actionable button
+    return "Get Tickets Now";
   };
 
   const isButtonDisabled = () => {
@@ -377,7 +406,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
                     Your Verification Code
                   </CardTitle>
                   <CardDescription className="text-sm text-muted-foreground">
-                    Use this code in the TicketSwift desktop application to run the ticket-snatching script for this event.
+                    Use this code and your saved preferences in the TicketSwift desktop application to run the ticket-snatching script for this event.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -404,11 +433,71 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
               size="lg" 
               className="w-full text-lg py-3" 
               disabled={isButtonDisabled()}
-              onClick={handleTicketAction}
+              onClick={handleInitialTicketAction}
             >
               {isSubmitting || loadingPurchaseStatus ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Ticket className="mr-2 h-5 w-5" />}
               {mainButtonText()}
             </Button>
+
+            <Dialog open={isPreferenceDialogOpen} onOpenChange={setIsPreferenceDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center">
+                    <Settings2 className="mr-2 h-5 w-5 text-primary" />
+                    Set Your Preferences
+                  </DialogTitle>
+                  <DialogDescription>
+                    These preferences will be saved with your verification code for the desktop app.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handlePreferenceFormSubmit} className="space-y-4 py-2">
+                  <div>
+                    <Label htmlFor="ticketCount">Number of Tickets</Label>
+                    <Input 
+                      id="ticketCount" 
+                      type="number" 
+                      value={ticketCount} 
+                      onChange={(e) => setTicketCount(e.target.value)} 
+                      min="1" 
+                      max="10" // Example max
+                      required 
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sessionPreference">Session Preference (if applicable)</Label>
+                    <Input 
+                      id="sessionPreference" 
+                      type="text" 
+                      placeholder="e.g., Any, Matinee, Evening, Specific date/time" 
+                      value={sessionPreference} 
+                      onChange={(e) => setSessionPreference(e.target.value)} 
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="seatPreferenceOrder">Seat Preference Order</Label>
+                    <Textarea 
+                      id="seatPreferenceOrder" 
+                      placeholder="e.g., Section A, Row 1-5; Section C; Front Balcony..." 
+                      value={seatPreferenceOrder} 
+                      onChange={(e) => setSeatPreferenceOrder(e.target.value)} 
+                      rows={3} 
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                  <DialogFooter className="mt-6">
+                    <Button type="button" variant="outline" onClick={() => setIsPreferenceDialogOpen(false)} disabled={isSubmitting}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Confirm & Get Code
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
             
             <Card className="mt-8 bg-secondary/20 border-primary/30">
               <CardHeader>
@@ -427,3 +516,5 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     </div>
   );
 }
+
+    
