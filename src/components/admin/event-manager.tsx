@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { MOCK_EVENTS, type TicketEvent } from "@/lib/constants";
+import { type TicketEvent } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -35,9 +35,12 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { db } from "@/lib/firebase"; // Import Firestore instance
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot } from "firebase/firestore";
+import { LoadingSpinner } from "@/components/shared/loading-spinner";
 
 const eventSchemaBase = z.object({
-  id: z.string().optional(),
+  // id is generated or comes from Firestore, not part of the form values directly for creation
   name: z.string().min(3, "Event name must be at least 3 characters."),
   venue: z.string().min(3, "Venue name must be at least 3 characters."),
   onSaleDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid on-sale date format."),
@@ -57,7 +60,7 @@ const eventSchema = eventSchemaBase.refine(
   },
   {
     message: "End date must be after the on-sale date.",
-    path: ["endDate"], // Path of the error
+    path: ["endDate"],
   }
 );
 
@@ -82,16 +85,14 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
 
 
 export function EventManager() {
-  const { isAdmin, loading: authLoading } = useAuth();
+  const { isAdmin, loading: authLoading, user } = useAuth();
   const router = useRouter();
   const [events, setEvents] = useState<TicketEvent[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TicketEvent | null>(null);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    setEvents(MOCK_EVENTS);
-  }, []);
 
   const {
     register,
@@ -106,12 +107,36 @@ export function EventManager() {
       imageUrl: "",
       description: "",
       dataAiHint: "",
-      onSaleDate: new Date().toISOString().split('T')[0], // Default to today
-      endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0], // Default to a week from today
+      onSaleDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
     }
   });
 
   const watchedImageUrl = watch("imageUrl");
+
+  // Fetch events from Firestore
+  useEffect(() => {
+    if (!user || !isAdmin) {
+      setIsLoadingEvents(false);
+      return;
+    }
+    setIsLoadingEvents(true);
+    const eventsCollectionRef = collection(db, "events");
+    
+    // Use onSnapshot for real-time updates
+    const unsubscribe = onSnapshot(eventsCollectionRef, (snapshot) => {
+      const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TicketEvent));
+      setEvents(fetchedEvents);
+      setIsLoadingEvents(false);
+    }, (error) => {
+      console.error("Error fetching events: ", error);
+      toast({ title: "Error", description: "Could not fetch events from database.", variant: "destructive" });
+      setIsLoadingEvents(false);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on component unmount
+  }, [user, isAdmin, toast]);
+
 
  useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -129,49 +154,78 @@ export function EventManager() {
     setEditingEvent(null);
     const today = new Date().toISOString().split('T')[0];
     const weekLater = new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0];
-    reset({ 
-      id: undefined, 
-      name: "", 
-      venue: "", 
-      onSaleDate: today, 
-      endDate: weekLater, 
-      price: 0, 
-      imageUrl: "", 
-      description: "", 
-      dataAiHint: "" 
+    reset({
+      name: "",
+      venue: "",
+      onSaleDate: today,
+      endDate: weekLater,
+      price: 0,
+      imageUrl: "",
+      description: "",
+      dataAiHint: ""
     });
     setIsDialogOpen(true);
   };
 
   const handleEditEvent = (event: TicketEvent) => {
     setEditingEvent(event);
-    reset(event); 
+    reset({
+        name: event.name,
+        venue: event.venue,
+        onSaleDate: event.onSaleDate, // Firestore dates are strings if stored directly
+        endDate: event.endDate,
+        price: event.price,
+        imageUrl: event.imageUrl || "",
+        description: event.description || "",
+        dataAiHint: event.dataAiHint || ""
+    });
     setIsDialogOpen(true);
   };
 
-  const handleDeleteEvent = (eventId: string) => {
-    setEvents(prevEvents => prevEvents.filter((event) => event.id !== eventId));
-    toast({ title: "Event Deleted", description: "The event has been successfully removed from the list." });
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    try {
+      await deleteDoc(doc(db, "events", eventId));
+      toast({ title: "Event Deleted", description: "The event has been removed from Firestore." });
+      // Real-time listener will update the UI
+    } catch (error) {
+      console.error("Error deleting event: ", error);
+      toast({ title: "Error", description: "Could not delete event.", variant: "destructive" });
+    }
   };
 
-  const onSubmit: SubmitHandler<EventFormValues> = (data) => {
-    if (editingEvent) {
-      setEvents(prevEvents => prevEvents.map((event) => (event.id === editingEvent.id ? { ...event, ...data, id: editingEvent.id } : event)));
-      toast({ title: "Event Updated", description: "The event has been successfully updated." });
-    } else {
-      const newEventWithId = { ...data, id: `evt${Date.now()}` };
-      setEvents(prevEvents => [...prevEvents, newEventWithId]);
-      toast({ title: "Event Added", description: "The new event has been successfully added." });
+  const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
+    if (!user || !isAdmin) {
+      toast({ title: "Unauthorized", description: "You are not authorized to perform this action.", variant: "destructive" });
+      return;
     }
-    setIsDialogOpen(false);
-    reset();
+    setIsSubmitting(true);
+    try {
+      if (editingEvent) {
+        const eventRef = doc(db, "events", editingEvent.id);
+        await updateDoc(eventRef, { ...data }); // Use updateDoc for existing documents
+        toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
+      } else {
+        const newEventId = `evt${Date.now()}`;
+        const newEventRef = doc(db, "events", newEventId);
+        await setDoc(newEventRef, { id: newEventId, ...data }); // Use setDoc with explicit ID for new documents
+        toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
+      }
+      setIsDialogOpen(false);
+      reset();
+    } catch (error) {
+      console.error("Error saving event: ", error);
+      toast({ title: "Error", description: "Could not save event to Firestore.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-  
-  if (authLoading) {
-    return <div className="flex justify-center items-center h-64"><Settings className="h-12 w-12 animate-spin text-primary" /></div>;
+
+  if (authLoading || (isLoadingEvents && user && isAdmin)) {
+    return <div className="flex justify-center items-center h-64"><LoadingSpinner size={48} /></div>;
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !authLoading) {
      return (
         <div className="flex flex-col items-center justify-center h-64 text-center p-4">
             <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
@@ -188,7 +242,7 @@ export function EventManager() {
         <h2 className="text-3xl font-bold flex items-center gap-2">
           <CalendarDays className="h-8 w-8 text-primary" /> Event Management
         </h2>
-        <Button onClick={handleAddEvent}>
+        <Button onClick={handleAddEvent} disabled={isSubmitting}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Event
         </Button>
       </div>
@@ -204,25 +258,25 @@ export function EventManager() {
           <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
             <div className="md:col-span-2">
               <Label htmlFor="name">Event Name</Label>
-              <Input id="name" {...register("name")} />
+              <Input id="name" {...register("name")} disabled={isSubmitting} />
               {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
             </div>
-            
+
             <div>
               <Label htmlFor="onSaleDate">On Sale Date</Label>
-              <Input id="onSaleDate" type="date" {...register("onSaleDate")} />
+              <Input id="onSaleDate" type="date" {...register("onSaleDate")} disabled={isSubmitting} />
               {errors.onSaleDate && <p className="text-sm text-destructive">{errors.onSaleDate.message}</p>}
             </div>
 
             <div>
               <Label htmlFor="endDate">End Date</Label>
-              <Input id="endDate" type="date" {...register("endDate")} />
+              <Input id="endDate" type="date" {...register("endDate")} disabled={isSubmitting} />
               {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
             </div>
 
             <div>
               <Label htmlFor="venue">Venue</Label>
-              <Input id="venue" {...register("venue")} />
+              <Input id="venue" {...register("venue")} disabled={isSubmitting} />
               {errors.venue && <p className="text-sm text-destructive">{errors.venue.message}</p>}
             </div>
 
@@ -230,14 +284,14 @@ export function EventManager() {
               <Label htmlFor="price">Price ($)</Label>
               <div className="relative">
                 <DollarSign className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="price" type="number" step="0.01" {...register("price")} className="pl-7" />
+                <Input id="price" type="number" step="0.01" {...register("price")} className="pl-7" disabled={isSubmitting} />
               </div>
               {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
             </div>
-            
+
             <div className="md:col-span-2">
               <Label htmlFor="imageUrl">Image URL</Label>
-              <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} />
+              <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
               {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
               {watchedImageUrl && (
                 <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
@@ -248,21 +302,23 @@ export function EventManager() {
 
              <div className="md:col-span-2">
               <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
-              <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} />
+              <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} disabled={isSubmitting} />
               {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
             </div>
 
             <div className="md:col-span-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" {...register("description")} rows={3} />
+              <Textarea id="description" {...register("description")} rows={3} disabled={isSubmitting} />
               {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
             </div>
 
             <DialogFooter className="md:col-span-2">
               <DialogClose asChild>
-                <Button type="button" variant="outline">Cancel</Button>
+                <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
-              <Button type="submit">{editingEvent ? "Save Changes" : "Add Event"}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? <LoadingSpinner className="mr-2" /> : (editingEvent ? "Save Changes" : "Add Event")}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -270,7 +326,7 @@ export function EventManager() {
 
       <Card className="shadow-lg">
         <Table>
-          <TableCaption>A list of all ticket events. Changes here are for this admin session (prototype).</TableCaption>
+          <TableCaption>A list of all ticket events from Firestore.</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[100px]">Image</TableHead>
@@ -314,11 +370,11 @@ export function EventManager() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)}>
+                  <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting}>
                     <Edit className="h-4 w-4" />
                     <span className="sr-only">Edit</span>
                   </Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDeleteEvent(event.id)}>
+                  <Button variant="destructive" size="icon" onClick={() => handleDeleteEvent(event.id)} disabled={isSubmitting}>
                     <Trash2 className="h-4 w-4" />
                     <span className="sr-only">Delete</span>
                   </Button>
@@ -328,9 +384,14 @@ export function EventManager() {
           })}
           </TableBody>
         </Table>
-         {events.length === 0 && (
+         {events.length === 0 && !isLoadingEvents && (
             <div className="text-center p-8 text-muted-foreground">
-                No events found. Click "Add New Event" to get started.
+                No events found in Firestore. Click "Add New Event" to get started.
+            </div>
+        )}
+         {isLoadingEvents && (
+            <div className="text-center p-8 text-muted-foreground">
+                <LoadingSpinner /> Loading events...
             </div>
         )}
       </Card>
