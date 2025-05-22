@@ -20,10 +20,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -32,13 +32,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
+import Image from "next/image"; // For displaying image previews
+import { Card } from "@/components/ui/card"; // Card for better layout
 
 const eventSchema = z.object({
   id: z.string().optional(),
@@ -46,6 +48,10 @@ const eventSchema = z.object({
   date: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid date format."),
   venue: z.string().min(3, "Venue name must be at least 3 characters."),
   status: z.enum(["Upcoming", "On Sale", "Sold Out", "Past"]),
+  price: z.coerce.number().positive("Price must be a positive number."),
+  imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
+  description: z.string().optional(),
+  dataAiHint: z.string().optional(),
 });
 
 type EventFormValues = z.infer<typeof eventSchema>;
@@ -53,20 +59,37 @@ type EventFormValues = z.infer<typeof eventSchema>;
 export function EventManager() {
   const { isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [events, setEvents] = useState<TicketEvent[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<TicketEvent[]>([]); // Initialize with empty array
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TicketEvent | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Simulate fetching events or use MOCK_EVENTS for initialization
+    // In a real app, this would be an API call.
+    // For this prototype, we'll initialize with MOCK_EVENTS and allow manipulation.
+    setEvents(MOCK_EVENTS);
+  }, []);
+
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
+    defaultValues: {
+      price: 0,
+      imageUrl: "",
+      description: "",
+      dataAiHint: "",
+    }
   });
+
+  const watchedImageUrl = watch("imageUrl");
 
  useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -82,30 +105,30 @@ export function EventManager() {
 
   const handleAddEvent = () => {
     setEditingEvent(null);
-    reset({ id: undefined, name: "", date: "", venue: "", status: "Upcoming" });
+    reset({ id: undefined, name: "", date: "", venue: "", status: "Upcoming", price: 0, imageUrl: "", description: "", dataAiHint: "" });
     setIsDialogOpen(true);
   };
 
   const handleEditEvent = (event: TicketEvent) => {
     setEditingEvent(event);
-    reset(event); // Populate form with event data
+    reset(event); 
     setIsDialogOpen(true);
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    setEvents(events.filter((event) => event.id !== eventId));
-    toast({ title: "Event Deleted", description: "The event has been successfully removed." });
+    // In a real app, this would also call an API.
+    // For prototype, we filter the state.
+    setEvents(prevEvents => prevEvents.filter((event) => event.id !== eventId));
+    toast({ title: "Event Deleted", description: "The event has been successfully removed from the list." });
   };
 
   const onSubmit: SubmitHandler<EventFormValues> = (data) => {
     if (editingEvent) {
-      // Update existing event
-      setEvents(events.map((event) => (event.id === editingEvent.id ? { ...event, ...data, id: editingEvent.id } : event)));
+      setEvents(prevEvents => prevEvents.map((event) => (event.id === editingEvent.id ? { ...event, ...data, id: editingEvent.id } : event)));
       toast({ title: "Event Updated", description: "The event has been successfully updated." });
     } else {
-      // Add new event
-      const newEvent = { ...data, id: `evt${Date.now()}` };
-      setEvents([...events, newEvent]);
+      const newEventWithId = { ...data, id: `evt${Date.now()}` };
+      setEvents(prevEvents => [...prevEvents, newEventWithId]);
       toast({ title: "Event Added", description: "The new event has been successfully added." });
     }
     setIsDialogOpen(false);
@@ -140,29 +163,41 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-lg"> {/* Increased width for more fields */}
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
-            <div>
+          <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="md:col-span-2">
               <Label htmlFor="name">Event Name</Label>
               <Input id="name" {...register("name")} />
               {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
             </div>
+            
             <div>
               <Label htmlFor="date">Date</Label>
               <Input id="date" type="date" {...register("date")} />
               {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
             </div>
+
             <div>
               <Label htmlFor="venue">Venue</Label>
               <Input id="venue" {...register("venue")} />
               {errors.venue && <p className="text-sm text-destructive">{errors.venue.message}</p>}
             </div>
+
+            <div>
+              <Label htmlFor="price">Price ($)</Label>
+              <div className="relative">
+                <DollarSign className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id="price" type="number" step="0.01" {...register("price")} className="pl-7" />
+              </div>
+              {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
+            </div>
+            
             <div>
               <Label htmlFor="status">Status</Label>
               <Select onValueChange={(value) => setValue("status", value as EventFormValues["status"])} defaultValue={editingEvent?.status || "Upcoming"}>
@@ -178,7 +213,31 @@ export function EventManager() {
               </Select>
               {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
             </div>
-            <DialogFooter>
+
+            <div className="md:col-span-2">
+              <Label htmlFor="imageUrl">Image URL</Label>
+              <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} />
+              {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
+              {watchedImageUrl && (
+                <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
+                  <Image src={watchedImageUrl} alt="Preview" layout="fill" objectFit="contain" />
+                </div>
+              )}
+            </div>
+
+             <div className="md:col-span-2">
+              <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
+              <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} />
+              {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
+            </div>
+
+            <div className="md:col-span-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea id="description" {...register("description")} rows={3} />
+              {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+            </div>
+
+            <DialogFooter className="md:col-span-2">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
@@ -190,12 +249,14 @@ export function EventManager() {
 
       <Card className="shadow-lg">
         <Table>
-          <TableCaption>A list of all ticket events.</TableCaption>
+          <TableCaption>A list of all ticket events. Changes here are for this admin session (prototype).</TableCaption>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[100px]">Image</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Venue</TableHead>
+              <TableHead>Price</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -203,9 +264,21 @@ export function EventManager() {
           <TableBody>
             {events.map((event) => (
               <TableRow key={event.id}>
+                <TableCell>
+                  {event.imageUrl ? (
+                    <div className="relative h-16 w-24 rounded overflow-hidden border">
+                      <Image src={event.imageUrl} alt={event.name} layout="fill" objectFit="cover" data-ai-hint={event.dataAiHint || "event image"} />
+                    </div>
+                  ) : (
+                    <div className="flex h-16 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
+                      <ImageIcon className="h-6 w-6" />
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="font-medium">{event.name}</TableCell>
                 <TableCell>{new Date(event.date).toLocaleDateString()}</TableCell>
                 <TableCell>{event.venue}</TableCell>
+                <TableCell>${event.price.toFixed(2)}</TableCell>
                 <TableCell>
                   <span
                     className={`px-2 py-1 text-xs font-semibold rounded-full

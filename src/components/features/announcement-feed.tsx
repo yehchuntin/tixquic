@@ -1,60 +1,26 @@
 
+// This component's functionality has been moved to event-card-list.tsx
+// This file can be removed if no longer referenced from other parts of the application.
 "use client";
 
-import { MOCK_ANNOUNCEMENTS, type Announcement } from "@/lib/constants";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import Image from "next/image";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, Newspaper } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function AnnouncementFeed() {
-  // In a real app, fetch announcements
-  const announcements = MOCK_ANNOUNCEMENTS;
-
+export default function DeprecatedAnnouncementFeed() {
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card>
+      <CardHeader>
         <div className="flex items-center gap-2">
-          <Newspaper className="h-6 w-6 text-primary" />
-          <CardTitle>Announcements</CardTitle>
+            <AlertTriangle className="h-6 w-6 text-destructive" />
+            <CardTitle>Component Deprecated</CardTitle>
         </div>
-        <Badge variant="secondary">{announcements.length} New</Badge>
+        <CardDescription>
+          The AnnouncementFeed component is no longer the primary source for event listings.
+          Event listing functionality has been moved to the EventList component (in event-card-list.tsx).
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        {announcements.length === 0 ? (
-          <p className="text-muted-foreground">No new announcements at the moment.</p>
-        ) : (
-          <ScrollArea className="h-[400px] pr-4">
-            <div className="space-y-6">
-              {announcements.map((announcement) => (
-                <Card key={announcement.id} className="overflow-hidden transition-shadow hover:shadow-md">
-                  {announcement.imageUrl && (
-                     <div className="relative h-40 w-full">
-                        <Image
-                        src={announcement.imageUrl}
-                        alt={announcement.title}
-                        layout="fill"
-                        objectFit="cover"
-                        data-ai-hint={announcement.dataAiHint || "news event"}
-                        />
-                    </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg">{announcement.title}</CardTitle>
-                    <div className="flex items-center text-xs text-muted-foreground pt-1">
-                        <CalendarIcon className="mr-1 h-3 w-3" />
-                        {new Date(announcement.date).toLocaleDateString()}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <CardDescription>{announcement.content}</CardDescription>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </ScrollArea>
-        )}
+        <p>This file (announcement-feed.tsx) likely needs to be removed or updated if it serves any other purpose.</p>
       </CardContent>
     </Card>
   );
