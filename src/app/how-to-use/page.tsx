@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpenText, Lightbulb, Briefcase, KeyRound, Settings, Star } from "lucide-react";
+import { BookOpenText, Lightbulb, KeyRound, Settings, Star } from "lucide-react"; // Briefcase removed
 import Link from "next/link";
 
 export default function HowToUsePage() {
@@ -29,7 +29,7 @@ export default function HowToUsePage() {
             To add or update your API key:
           </p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Navigate to the <Link href="/settings" className="text-primary hover:underline font-medium">Settings</Link> page.</li>
+            <li>Navigate to the <Link href="/settings" className="text-primary hover:underline font-medium">Settings</Link> page from the sidebar.</li>
             <li>Enter your OpenAI API Key in the designated field.</li>
             <li>Click "Save API Key". Your key will be stored securely in your browser's local storage for this prototype.</li>
           </ol>
@@ -66,43 +66,13 @@ export default function HowToUsePage() {
         </CardContent>
       </Card>
       
-      <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Briefcase className="h-6 w-6 text-primary" />
-            <CardTitle>3. Managing Modules</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p>
-            "Modules" in TicketSwift represent optional add-on features or enhanced capabilities that you can activate to tailor the app to your needs. Think of them as power-ups for your ticket-snatching efforts!
-          </p>
-          <p>
-            For example, a module might provide:
-          </p>
-          <ul className="list-disc list-inside space-y-1 pl-4">
-            <li>More advanced AI algorithms for seat prediction.</li>
-            <li>Access to priority queues for high-demand events.</li>
-            <li>Specialized tools for specific types of ticket sales.</li>
-          </ul>
-          <p>To manage your modules:</p>
-          <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Go to the <Link href="/modules" className="text-primary hover:underline font-medium">Modules</Link> page from the sidebar.</li>
-            <li>You'll see a list of available modules and their status (active/inactive).</li>
-            <li>For inactive modules, you might need an access key to activate them. (For this prototype, "VALIDKEY" can be used for demonstration).</li>
-            <li>Enter the key and click "Activate Module".</li>
-          </ol>
-           <p className="text-sm text-muted-foreground">
-            Activated modules can provide specific advantages or unlock new functionalities within TicketSwift.
-          </p>
-        </CardContent>
-      </Card>
+      {/* Modules section removed */}
 
        <Card className="shadow-lg" id="loyalty-info">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Star className="h-6 w-6 text-primary" />
-            <CardTitle>4. Loyalty Points</CardTitle>
+            <CardTitle>3. Loyalty Points</CardTitle> {/* Updated numbering */}
           </div>
         </CardHeader>
         <CardContent className="space-y-2">

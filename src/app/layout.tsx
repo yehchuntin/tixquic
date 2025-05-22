@@ -1,6 +1,6 @@
 
 import type { Metadata } from "next";
-import { Inter, Roboto_Mono } from "next/font/google"; // Changed from GeistSans and GeistMono
+import { Inter, Roboto_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/auth-context";
 import { Toaster } from "@/components/ui/toaster";
@@ -38,11 +38,11 @@ export default function RootLayout({
         className={`${inter.variable} ${robotoMono.variable} antialiased font-sans`} 
       >
         <AuthProvider>
-          <SidebarProvider defaultOpen={false}>
+          <SidebarProvider defaultOpen={false}> {/* Changed defaultOpen to false */}
             <Sidebar collapsible="icon">
               <AppSidebarNav />
             </Sidebar>
-            <div className="flex flex-1 flex-col"> {/* Changed w-full to flex-1 */}
+            <div className="flex flex-1 flex-col">
               <AppHeader />
               <SidebarInset>
                 <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>

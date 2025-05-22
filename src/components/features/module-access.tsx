@@ -1,137 +1,105 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { BookOpenText, Lightbulb, KeyRound, Settings, Star } from "lucide-react"; // Briefcase removed
+import Link from "next/link";
 
-"use client";
-
-import { useState } from "react";
-import { MOCK_MODULES, type ModuleItem } from "@/lib/constants";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Lock, Unlock, Briefcase, Info } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-export function ModuleAccess() {
-  const [modules, setModules] = useState<ModuleItem[]>(MOCK_MODULES);
-  const [accessKey, setAccessKey] = useState("");
-  const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const handleActivateModule = (moduleId: string) => {
-    // Mock validation: if key is "VALIDKEY", activate.
-    // In a real app, this would involve backend validation.
-    if (accessKey === "VALIDKEY") {
-      setModules(
-        modules.map((mod) =>
-          mod.id === moduleId ? { ...mod, activated: true } : mod
-        )
-      );
-      toast({
-        title: "Module Activated!",
-        description: `${modules.find(m => m.id === moduleId)?.name} is now active.`,
-      });
-      setAccessKey("");
-      setSelectedModuleId(null);
-    } else {
-      toast({
-        title: "Activation Failed",
-        description: "Invalid access key.",
-        variant: "destructive",
-      });
-    }
-  };
-
+export default function HowToUsePage() {
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3 mb-2">
-        <Briefcase className="h-10 w-10 text-primary"/>
-        <h1 className="text-3xl font-bold">Module Management</h1>
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="flex items-center gap-3 mb-6">
+        <BookOpenText className="h-10 w-10 text-primary" />
+        <h1 className="text-3xl font-bold">How to Use TicketSwift</h1>
       </div>
-      <CardDescription className="text-lg mb-6 -mt-6">
-        Activate or deactivate optional features and enhancements for your TicketSwift experience.
+      <CardDescription className="text-lg">
+        Welcome to TicketSwift! This guide will walk you through setting up and using the app effectively.
       </CardDescription>
-      
-      <Alert variant="default" className="bg-accent/10 border-accent/50">
-        <Info className="h-4 w-4" />
-        <AlertTitle>What are Modules?</AlertTitle>
-        <AlertDescription>
-          Modules are like add-ons or power-ups that provide specialized functionalities or advantages within TicketSwift. Some might require an access key for activation (for this prototype, "VALIDKEY" works for demonstration).
-        </AlertDescription>
-      </Alert>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {modules.map((moduleItem) => (
-          <Card key={moduleItem.id} className={`shadow-lg transition-all flex flex-col ${moduleItem.activated ? 'border-green-500' : 'border-border'}`}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  {moduleItem.activated ? <Unlock className="text-green-500" /> : <Lock className="text-muted-foreground" />} 
-                  {moduleItem.name}
-                </CardTitle>
-                {moduleItem.activated ? (
-                  <span className="text-xs font-semibold text-green-600 bg-green-100 px-2 py-1 rounded-full flex items-center gap-1">
-                    <CheckCircle2 className="h-3 w-3"/> Activated
-                  </span>
-                ) : (
-                  <span className="text-xs font-semibold text-red-600 bg-red-100 px-2 py-1 rounded-full flex items-center gap-1">
-                    <XCircle className="h-3 w-3"/> Inactive
-                  </span>
-                )}
-              </div>
-              <CardDescription className="pt-2">{moduleItem.description}</CardDescription>
-            </CardHeader>
-            
-            <div className="mt-auto"> {/* Pushes content below to the bottom */}
-              {!moduleItem.activated && (
-                <>
-                  <CardContent>
-                      <Separator className="my-3"/>
-                      <Label htmlFor={`accessKey-${moduleItem.id}`} className="text-sm font-medium">Access Key</Label>
-                      <Input
-                        id={`accessKey-${moduleItem.id}`}
-                        type="text"
-                        placeholder="Enter access key"
-                        className="mt-1"
-                        value={selectedModuleId === moduleItem.id ? accessKey : ""}
-                        onChange={(e) => {
-                          setAccessKey(e.target.value);
-                          setSelectedModuleId(moduleItem.id);
-                        }}
-                      />
-                  </CardContent>
-                  <CardFooter>
-                    <Button 
-                      className="w-full" 
-                      onClick={() => handleActivateModule(moduleItem.id)}
-                      disabled={selectedModuleId === moduleItem.id && !accessKey.trim()}
-                    >
-                      Activate Module
-                    </Button>
-                  </CardFooter>
-                </>
-              )}
-              {moduleItem.activated && (
-                  <CardContent>
-                      <Separator className="my-3"/>
-                      <p className="text-sm text-green-600 flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4"/>This module is currently active.
-                      </p>
-                  </CardContent>
-              )}
-            </div>
-          </Card>
-        ))}
-      </div>
-      {modules.length === 0 && (
-         <Card className="py-12">
-            <CardContent className="text-center text-muted-foreground">
-                <Briefcase className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No modules available at the moment.</p>
-                <p>Check back later for new features and enhancements!</p>
-            </CardContent>
-        </Card>
-      )}
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Settings className="h-6 w-6 text-primary" />
+            <CardTitle>1. Getting Started & API Key Setup</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p>
+            First, ensure you are logged in. TicketSwift utilizes AI features that require an OpenAI API Key.
+          </p>
+          <p>
+            To add or update your API key:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 pl-4">
+            <li>Navigate to the <Link href="/settings" className="text-primary hover:underline font-medium">Settings</Link> page from the sidebar.</li>
+            <li>Enter your OpenAI API Key in the designated field.</li>
+            <li>Click "Save API Key". Your key will be stored securely in your browser's local storage for this prototype.</li>
+          </ol>
+          <p className="text-sm text-muted-foreground">
+            Note: In a production environment, API keys would be managed with more robust backend security.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Lightbulb className="h-6 w-6 text-primary" />
+            <CardTitle>2. Understanding the AI Seat Predictor</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p>
+            The AI Seat Predictor is a powerful tool designed to help you find the best seats for a specific event based on historical data and your preferences.
+          </p>
+          <p>
+            While there isn't a general "Seat Predictor" page in the main navigation, this functionality is envisioned to be integrated directly within each event's detail page in a future version.
+            You would typically:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 pl-4">
+            <li>Navigate to the specific event you are interested in.</li>
+            <li>Look for an "AI Seat Prediction" or similar section/button.</li>
+            <li>Provide any required event-specific details (if prompted, though much data might be pre-filled).</li>
+            <li>Receive AI-driven seat recommendations for that particular event.</li>
+          </ol>
+           <p className="text-sm text-muted-foreground">
+            The standalone <code className="bg-muted px-1 py-0.5 rounded">/seat-predictor</code> page has been kept in the codebase for development and testing purposes, but is not part of the primary user navigation.
+          </p>
+        </CardContent>
+      </Card>
+      
+      {/* Modules section removed */}
+
+       <Card className="shadow-lg" id="loyalty-info">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Star className="h-6 w-6 text-primary" />
+            <CardTitle>3. Loyalty Points</CardTitle> {/* Updated numbering */}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p>
+            As you use TicketSwift, you'll accumulate Loyalty Points! These points can be used for future benefits (details to be announced).
+          </p>
+          <p>
+            You can see your current points balance in the header, next to the theme toggle, when you are logged in.
+          </p>
+           <p className="text-sm text-muted-foreground">
+            The loyalty program is currently in a conceptual phase. More details on rewards and redemption will be available soon.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+            <CardTitle>General Tips</CardTitle>
+        </CardHeader>
+        <CardContent>
+            <ul className="list-disc list-inside space-y-1">
+                <li>Keep your OpenAI API Key confidential.</li>
+                <li>Ensure the data provided to the AI tools is as accurate as possible for best results.</li>
+                <li>Explore all sections of the app using the sidebar navigation.</li>
+                <li>Use the light/dark mode toggle (moon/sun icon in the header) to suit your preference.</li>
+            </ul>
+        </CardContent>
+      </Card>
     </div>
   );
 }

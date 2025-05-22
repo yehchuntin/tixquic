@@ -9,32 +9,30 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarGroupLabel,
-  SidebarGroup,
-  SidebarContent,
   SidebarHeader,
+  useSidebar, // Removed other unused imports like SidebarGroupLabel, SidebarGroup
+  SidebarContent,
   SidebarFooter,
-  useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button"; // Added Button
 import { AppLogo } from "@/components/icons/app-logo";
-import { Separator } from "@/components/ui/separator";
-import { useAuth } from "@/contexts/auth-context"; // Assuming you have an auth context
+// Separator removed as it's not used directly here
+import { useAuth } from "@/contexts/auth-context";
 
 export function AppSidebarNav() {
   const pathname = usePathname();
-  const { isAdmin, user } = useAuth(); // Get isAdmin state from context
-  const { setOpenMobile, isMobile: sidebarIsMobile } = useSidebar(); // Renamed to avoid conflict with hook name
-
+  const { isAdmin, user } = useAuth();
+  const { toggleSidebar, isMobile: sidebarIsMobile, setOpenMobile, state: sidebarState } = useSidebar();
 
   const handleLinkClick = () => {
-    if (sidebarIsMobile) { // Use renamed variable
+    if (sidebarIsMobile) {
       setOpenMobile(false);
     }
   };
 
   const visibleNavItems = NAV_ITEMS.filter(item => {
     if (item.adminOnly) {
-      return user && isAdmin; // Only show admin items if user is logged in and is admin
+      return user && isAdmin;
     }
     return true;
   });
@@ -42,10 +40,20 @@ export function AppSidebarNav() {
   return (
     <>
       <SidebarHeader className="border-b">
-        <Link href="/" className="flex items-center gap-2 py-1" onClick={handleLinkClick}>
-          <AppLogo className="h-8 w-8 text-primary" />
-          <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden">TicketSwift</h1>
-        </Link>
+        <Button
+          variant="ghost"
+          onClick={toggleSidebar}
+          className={cn(
+            "flex w-full items-center gap-2 text-left h-auto justify-start focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
+            sidebarState === 'collapsed' ? "px-1 py-2 justify-center" : "px-2 py-[0.6rem]" // Adjusted padding for collapsed state
+          )}
+          aria-label="Toggle sidebar"
+        >
+          <AppLogo className="h-8 w-8 text-primary flex-shrink-0" />
+          <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden text-foreground">
+            TicketSwift
+          </h1>
+        </Button>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>

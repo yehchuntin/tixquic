@@ -3,11 +3,11 @@ import {
   Home,
   KeyRound,
   Lightbulb,
-  BarChart3,
+  // BarChart3, // Removed as SuccessReport page is removed for user input
   Settings as SettingsIcon,
   LayoutDashboard,
   Users,
-  Briefcase,
+  // Briefcase, // Icon for Modules, which is being removed
   BookOpenText,
   SlidersHorizontal
 } from "lucide-react";
@@ -34,24 +34,31 @@ export const NAV_ITEMS: NavItem[] = [
     icon: BookOpenText,
     tooltip: "Tutorial & Guides",
   },
-  // { // Seat Predictor removed from main navigation
+  // { // Seat Predictor removed from main navigation as per feedback
   //   title: "Seat Predictor",
   //   href: "/seat-predictor",
   //   icon: Lightbulb,
   //   tooltip: "AI Seat Predictor",
   // },
-  {
-    title: "Modules",
-    href: "/modules",
-    icon: Briefcase,
-    tooltip: "Manage Modules",
-  },
+  // { // Modules page removed
+  //   title: "Modules",
+  //   href: "/modules",
+  //   icon: Briefcase,
+  //   tooltip: "Manage Modules",
+  // },
   {
     title: "Settings",
     href: "/settings",
-    icon: SlidersHorizontal,
+    icon: SlidersHorizontal, // Changed from KeyRound to be more generic for settings
     tooltip: "User Settings",
   },
+  // Success Report page removed from user navigation
+  // {
+  //   title: "Success Report",
+  //   href: "/success-report",
+  //   icon: BarChart3,
+  //   tooltip: "View Success Reports"
+  // },
   {
     title: "Admin",
     href: "/admin",
@@ -110,15 +117,4 @@ export const MOCK_EVENTS: TicketEvent[] = [
   { id: "evt4", name: "Pop Sensation Tour", date: "2024-06-10", venue: "City Center Hall", status: "Past" },
 ];
 
-export type ModuleItem = {
-  id: string;
-  name: string;
-  description: string;
-  activated: boolean;
-};
-
-export const MOCK_MODULES: ModuleItem[] = [
-    { id: "mod1", name: "Advanced Seat Prediction", description: "Unlock enhanced AI algorithms for even better seat predictions.", activated: false },
-    { id: "mod2", name: "Priority Queue Access", description: "Get ahead in virtual queues for high-demand events.", activated: true },
-    { id: "mod3", name: "Automated CAPTCHA Solver Tier 2", description: "Faster and more reliable CAPTCHA solving.", activated: false },
-];
+// ModuleItem type and MOCK_MODULES removed as the feature is removed from web app.
