@@ -11,29 +11,30 @@ service cloud.firestore {
               request.auth.token.email == '2017yehchunting@gmail.com');
     }
 
-    // Helper function to check if the requesting user is the owner of the document
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
-
     // Rules for the 'events' collection
     match /events/{eventId} {
+      // Anyone can read events (for homepage display)
       allow read: if true;
+
+      // Only authenticated admin users can create, update, or delete events
       allow create, update, delete: if isAdmin();
     }
 
     // Rules for the 'userEventVerifications' collection
     match /userEventVerifications/{verificationId} {
-      // Users can read their own verification documents
-      allow read: if isOwner(resource.data.userId);
-      // Users can create their own verification documents
+      // User can read their own verification records
+      // Admins can read any verification record (e.g., for debugging or cleanup checks, though cleanup is done by admin SDK)
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || isAdmin();
+      
+      // User can create their own verification record
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      // Users can update their own verification documents (for preferences)
+      
+      // User can update their own verification record (e.g., for preferences)
       allow update: if request.auth != null && resource.data.userId == request.auth.uid;
-      // Generally, users should not delete their verification records directly
-      allow delete: if false; // Or restrict to admins: if isAdmin();
+      
+      // Only admins can delete verification records (for manual cleanup)
+      // Users should not be able to delete their own codes to prevent accidental loss if they want to re-use.
+      allow delete: if isAdmin();
     }
   }
 }
-
-    

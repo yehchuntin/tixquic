@@ -22,10 +22,21 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,14 +44,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { db } from "@/lib/firebase"; // Import Firestore instance
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot, query, where, writeBatch } from "firebase/firestore";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 
 const eventSchemaBase = z.object({
-  // id is generated or comes from Firestore, not part of the form values directly for creation
   name: z.string().min(3, "Event name must be at least 3 characters."),
   venue: z.string().min(3, "Venue name must be at least 3 characters."),
   onSaleDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid on-sale date format."),
@@ -54,12 +64,12 @@ const eventSchemaBase = z.object({
 const eventSchema = eventSchemaBase.refine(
   (data) => {
     if (data.onSaleDate && data.endDate) {
-      return new Date(data.endDate) > new Date(data.onSaleDate);
+      return new Date(data.endDate) >= new Date(data.onSaleDate); // Allow same day for end date
     }
     return true;
   },
   {
-    message: "End date must be after the on-sale date.",
+    message: "End date must be on or after the on-sale date.",
     path: ["endDate"],
   }
 );
@@ -72,9 +82,9 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
   const onSale = new Date(event.onSaleDate);
   onSale.setHours(0,0,0,0);
   const end = new Date(event.endDate);
-  end.setHours(0,0,0,0);
+  end.setHours(0,0,0,0); // Compare end of day for endDate
 
-  if (today >= end) {
+  if (today > end) { // If today is strictly after the end date
     return { text: "Past", variant: "destructive" };
   }
   if (today >= onSale) {
@@ -92,6 +102,7 @@ export function EventManager() {
   const [editingEvent, setEditingEvent] = useState<TicketEvent | null>(null);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
   const { toast } = useToast();
 
   const {
@@ -114,7 +125,6 @@ export function EventManager() {
 
   const watchedImageUrl = watch("imageUrl");
 
-  // Fetch events from Firestore
   useEffect(() => {
     if (!user || !isAdmin) {
       setIsLoadingEvents(false);
@@ -123,9 +133,23 @@ export function EventManager() {
     setIsLoadingEvents(true);
     const eventsCollectionRef = collection(db, "events");
     
-    // Use onSnapshot for real-time updates
     const unsubscribe = onSnapshot(eventsCollectionRef, (snapshot) => {
-      const fetchedEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TicketEvent));
+      const fetchedEvents = snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Ensure dates are correctly formatted string 'YYYY-MM-DD'
+        const onSaleDateString = data.onSaleDate instanceof Timestamp 
+            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
+            : data.onSaleDate;
+        const endDateString = data.endDate instanceof Timestamp 
+            ? data.endDate.toDate().toISOString().split('T')[0] 
+            : data.endDate;
+        return { 
+            id: doc.id, 
+            ...data,
+            onSaleDate: onSaleDateString,
+            endDate: endDateString,
+        } as TicketEvent;
+      }).sort((a, b) => new Date(b.onSaleDate).getTime() - new Date(a.onSaleDate).getTime()); // Sort by most recent onSaleDate first
       setEvents(fetchedEvents);
       setIsLoadingEvents(false);
     }, (error) => {
@@ -134,7 +158,7 @@ export function EventManager() {
       setIsLoadingEvents(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on component unmount
+    return () => unsubscribe();
   }, [user, isAdmin, toast]);
 
 
@@ -172,7 +196,7 @@ export function EventManager() {
     reset({
         name: event.name,
         venue: event.venue,
-        onSaleDate: event.onSaleDate, // Firestore dates are strings if stored directly
+        onSaleDate: event.onSaleDate,
         endDate: event.endDate,
         price: event.price,
         imageUrl: event.imageUrl || "",
@@ -183,11 +207,10 @@ export function EventManager() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    if (!window.confirm("Are you sure you want to delete this event? This will NOT delete associated verification codes.")) return;
     try {
       await deleteDoc(doc(db, "events", eventId));
       toast({ title: "Event Deleted", description: "The event has been removed from Firestore." });
-      // Real-time listener will update the UI
     } catch (error) {
       console.error("Error deleting event: ", error);
       toast({ title: "Error", description: "Could not delete event.", variant: "destructive" });
@@ -201,14 +224,19 @@ export function EventManager() {
     }
     setIsSubmitting(true);
     try {
+      const eventDataToSave = {
+        ...data,
+        price: Number(data.price) // Ensure price is stored as a number
+      };
+
       if (editingEvent) {
         const eventRef = doc(db, "events", editingEvent.id);
-        await updateDoc(eventRef, { ...data }); // Use updateDoc for existing documents
+        await updateDoc(eventRef, eventDataToSave);
         toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
       } else {
         const newEventId = `evt${Date.now()}`;
         const newEventRef = doc(db, "events", newEventId);
-        await setDoc(newEventRef, { id: newEventId, ...data }); // Use setDoc with explicit ID for new documents
+        await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
         toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
       }
       setIsDialogOpen(false);
@@ -220,6 +248,61 @@ export function EventManager() {
       setIsSubmitting(false);
     }
   };
+
+  const handleCleanUpExpiredVerifications = async () => {
+    setIsCleaningUp(true);
+    const today = new Date().toISOString().split('T')[0];
+    let deletedCount = 0;
+
+    try {
+      // 1. Fetch all events
+      const eventsQuery = query(collection(db, "events"));
+      const eventsSnapshot = await getDocs(eventsQuery);
+      const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TicketEvent));
+
+      // 2. Filter for past events
+      const pastEvents = allEvents.filter(event => {
+        const eventEndDate = new Date(event.endDate);
+        const todayDate = new Date(today);
+        return eventEndDate < todayDate;
+      });
+
+      if (pastEvents.length === 0) {
+        toast({ title: "No Past Events", description: "There are no past events with verifications to clean up." });
+        setIsCleaningUp(false);
+        return;
+      }
+
+      const batch = writeBatch(db);
+
+      // 3. For each past event, find and mark for deletion its verifications
+      for (const event of pastEvents) {
+        const verificationsQuery = query(collection(db, "userEventVerifications"), where("eventId", "==", event.id));
+        const verificationsSnapshot = await getDocs(verificationsQuery);
+        
+        if (!verificationsSnapshot.empty) {
+          verificationsSnapshot.forEach(verificationDoc => {
+            batch.delete(verificationDoc.ref);
+            deletedCount++;
+          });
+        }
+      }
+
+      if (deletedCount > 0) {
+        await batch.commit();
+        toast({ title: "Cleanup Successful", description: `Successfully deleted ${deletedCount} verification codes for past events.` });
+      } else {
+        toast({ title: "No Codes to Clean", description: "No verification codes found for past events." });
+      }
+
+    } catch (error) {
+      console.error("Error cleaning up expired verifications:", error);
+      toast({ title: "Cleanup Failed", description: "An error occurred during cleanup. Check console for details.", variant: "destructive" });
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
 
   if (authLoading || (isLoadingEvents && user && isAdmin)) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner size={48} /></div>;
@@ -295,7 +378,7 @@ export function EventManager() {
               {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
               {watchedImageUrl && (
                 <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
-                  <Image src={watchedImageUrl} alt="Preview" layout="fill" objectFit="contain" />
+                  <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} />
                 </div>
               )}
             </div>
@@ -347,7 +430,7 @@ export function EventManager() {
                 <TableCell>
                   {event.imageUrl ? (
                     <div className="relative h-16 w-24 rounded overflow-hidden border">
-                      <Image src={event.imageUrl} alt={event.name} layout="fill" objectFit="cover" data-ai-hint={event.dataAiHint || "event image"} />
+                      <Image src={event.imageUrl} alt={event.name} fill style={{objectFit:"cover"}} data-ai-hint={event.dataAiHint || "event image"} />
                     </div>
                   ) : (
                     <div className="flex h-16 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
@@ -370,11 +453,11 @@ export function EventManager() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting}>
+                  <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting || isCleaningUp}>
                     <Edit className="h-4 w-4" />
                     <span className="sr-only">Edit</span>
                   </Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDeleteEvent(event.id)} disabled={isSubmitting}>
+                  <Button variant="destructive" size="icon" onClick={() => handleDeleteEvent(event.id)} disabled={isSubmitting || isCleaningUp}>
                     <Trash2 className="h-4 w-4" />
                     <span className="sr-only">Delete</span>
                   </Button>
@@ -395,6 +478,48 @@ export function EventManager() {
             </div>
         )}
       </Card>
+
+      <Card className="shadow-lg mt-8">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-primary" />
+            Data Maintenance
+          </CardTitle>
+          <CardDescription>
+            Manage and clean up data related to events and verifications.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" disabled={isCleaningUp}>
+                {isCleaningUp ? <LoadingSpinner className="mr-2" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                {isCleaningUp ? "Cleaning Up..." : "Clean Up Expired Verifications"}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action will permanently delete all verification codes associated with events whose end date has passed. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleCleanUpExpiredVerifications} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
+                  {isCleaningUp ? <LoadingSpinner className="mr-2" /> : null}
+                  Yes, delete them
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <p className="text-sm text-muted-foreground mt-2">
+            This will remove verification codes for events that have already finished.
+          </p>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
+
