@@ -11,36 +11,29 @@ service cloud.firestore {
               request.auth.token.email == '2017yehchunting@gmail.com');
     }
 
+    // Helper function to check if the requesting user is the owner of the document
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
     // Rules for the 'events' collection
     match /events/{eventId} {
-      // Anyone can read events (for homepage display)
       allow read: if true;
-
-      // Only authenticated admin users can create, update, or delete events
       allow create, update, delete: if isAdmin();
     }
 
-    // Rules for 'userEventVerifications' collection
+    // Rules for the 'userEventVerifications' collection
     match /userEventVerifications/{verificationId} {
-      // A user can read their own verification records
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-
-      // A user can create their own verification record if:
-      // 1. They are authenticated.
-      // 2. The userId in the document being created matches their authenticated UID.
-      // 3. The document being created contains an eventId.
-      // 4. The document being created contains a verificationCode.
-      // 5. The document being created contains an eventName.
-      // 6. The document being created contains a purchaseDate (which should be a serverTimestamp).
-      allow create: if request.auth != null &&
-                      request.auth.uid == request.resource.data.userId &&
-                      request.resource.data.eventId is string &&
-                      request.resource.data.verificationCode is string &&
-                      request.resource.data.eventName is string &&
-                      request.resource.data.purchaseDate == request.time; // Ensure purchaseDate is set by server
-
-      // Disallow client-side updates and deletes on verification records for now
-      allow update, delete: if false;
+      // Users can read their own verification documents
+      allow read: if isOwner(resource.data.userId);
+      // Users can create their own verification documents
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // Users can update their own verification documents (for preferences)
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      // Generally, users should not delete their verification records directly
+      allow delete: if false; // Or restrict to admins: if isAdmin();
     }
   }
 }
+
+    
