@@ -1,15 +1,13 @@
 
 import {
-  Home,
-  KeyRound,
-  Lightbulb,
-  Settings as SettingsIcon,
   LayoutDashboard,
   Users,
   BookOpenText,
   SlidersHorizontal,
   Ticket as TicketIcon,
-  CalendarDays, // Keep for admin page title icon
+  CalendarDays, 
+  Settings as SettingsIcon, // Renamed to avoid conflict
+  Download, // Added Download icon
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,6 +33,12 @@ export const NAV_ITEMS: NavItem[] = [
     tooltip: "Tutorial & Guides",
   },
   {
+    title: "Download App", // New Download link
+    href: "/download",
+    icon: Download,
+    tooltip: "Download Desktop App",
+  },
+  {
     title: "Settings",
     href: "/settings",
     icon: SlidersHorizontal,
@@ -50,11 +54,11 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export type TicketEvent = {
-  id: string; // Will be the document ID in Firestore
+  id: string; 
   name: string;
   venue: string;
-  onSaleDate: string; // Date when event becomes "On Sale"
-  endDate: string;    // Date when event is no longer visible/active
+  onSaleDate: string; 
+  endDate: string;    
   price: number;
   imageUrl?: string;
   description?: string;
@@ -65,6 +69,7 @@ export type TicketEvent = {
 const getRelativeDate = (dayOffset: number): string => {
   const date = new Date();
   date.setDate(date.getDate() + dayOffset);
+  date.setHours(0, 0, 0, 0); // Normalize to start of day
   return date.toISOString().split('T')[0]; // YYYY-MM-DD
 };
 
@@ -72,11 +77,11 @@ const getRelativeDate = (dayOffset: number): string => {
 // They are kept here for reference or potential data seeding in the future.
 export const MOCK_EVENTS: TicketEvent[] = [
   {
-    id: "evt1_mock", // Changed ID to avoid potential conflicts if seeding
+    id: "evt1_mock",
     name: "Rock Legends Concert (Mock)",
     venue: "Stadium Arena",
-    onSaleDate: getRelativeDate(-10),
-    endDate: getRelativeDate(5),
+    onSaleDate: getRelativeDate(-10), // On sale 10 days ago
+    endDate: getRelativeDate(5), // Ends in 5 days
     price: 75.00,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Experience the titans of rock live in concert. A night to remember!",
@@ -86,14 +91,24 @@ export const MOCK_EVENTS: TicketEvent[] = [
     id: "evt2_mock",
     name: "Indie Fest 2024 (Mock)",
     venue: "Green Park",
-    onSaleDate: getRelativeDate(7),
-    endDate: getRelativeDate(14),
+    onSaleDate: getRelativeDate(7), // On sale in 7 days (Upcoming)
+    endDate: getRelativeDate(14), // Ends in 14 days
     price: 45.50,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Discover the best new indie bands at this year's Indie Fest.",
     dataAiHint: "music festival indie"
   },
-  // Add more mock events if needed for reference
+  {
+    id: "evt3_mock_past",
+    name: "Jazz Night (Mock - Past)",
+    venue: "The Blue Note",
+    onSaleDate: getRelativeDate(-30), // On sale 30 days ago
+    endDate: getRelativeDate(-5), // Ended 5 days ago (Past)
+    price: 60.00,
+    imageUrl: "https://placehold.co/600x400.png",
+    description: "An evening of smooth jazz.",
+    dataAiHint: "jazz music"
+  },
 ];
 
 
