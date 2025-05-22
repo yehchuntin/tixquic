@@ -323,6 +323,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
                   <CardTitle className="text-lg flex items-center text-primary/90">
                     Your Verification Code
                   </CardTitle>
+                  <CardDescription className="text-sm text-muted-foreground">
+                    Use this code in the TicketSwift desktop application to run the ticket-snatching script for this event.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex items-center space-x-2">

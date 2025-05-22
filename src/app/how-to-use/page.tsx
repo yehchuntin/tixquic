@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpenText, Lightbulb, KeyRound, Settings, Star, Ticket } from "lucide-react"; 
+import { BookOpenText, Lightbulb, KeyRound, Settings, Star, Ticket, MonitorPlay, Globe } from "lucide-react"; 
 import Link from "next/link";
 
 export default function HowToUsePage() {
@@ -11,19 +11,88 @@ export default function HowToUsePage() {
         <h1 className="text-3xl font-bold">How to Use TicketSwift</h1>
       </div>
       <CardDescription className="text-lg">
-        Welcome to TicketSwift! This guide will walk you through setting up and using the app effectively.
+        Welcome to TicketSwift! This guide explains how the system works and how to use this web application.
       </CardDescription>
 
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-6 w-6 text-primary" />
-            <CardTitle>1. Getting Started & API Key Setup</CardTitle>
+            <CardTitle>1. Understanding TicketSwift</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p>
-            First, ensure you are logged in. Some AI features (like the AI Seat Predictor, intended for future event-specific integration) require an OpenAI API Key.
+            TicketSwift is a two-part system designed to help you secure event tickets:
+          </p>
+          <ol className="list-decimal list-inside space-y-2 pl-4">
+            <li>
+              <strong className="flex items-center gap-1"><Globe className="h-5 w-5 text-accent" />This Web Application:</strong> Its main purpose is to allow you to browse upcoming events and obtain a unique <strong className="text-primary">Verification Code</strong> for events you're interested in.
+            </li>
+            <li>
+              <strong className="flex items-center gap-1"><MonitorPlay className="h-5 w-5 text-accent" />Future Desktop Application:</strong> You will input the Verification Code obtained from this web app into a separate desktop application (to be developed later). This desktop app will then use the code to identify the event and run an automated ticket-snatching script for it.
+            </li>
+          </ol>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Ticket className="h-6 w-6 text-primary" />
+            <CardTitle>2. Getting Event Verification Codes (This Web App)</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p>
+            On the <Link href="/" className="text-primary hover:underline font-medium">Dashboard</Link>, you'll find a list of featured events. Each card shows event details and price.
+          </p>
+          <p>
+            To get a verification code for an event:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 pl-4">
+            <li>Click on an event card or its "View Details" button.</li>
+            <li>On the event detail page, if the event is "On Sale", click the "Get Tickets Now" button.</li>
+            <li>Follow the prompts. A unique 16-character alphanumeric verification code will be generated for you.</li>
+            <li>This code will be displayed on the page. You can copy it for later use.</li>
+          </ol>
+           <p className="text-sm text-muted-foreground">
+            Note: You must be logged in to obtain a verification code. The "payment" step is currently simulated.
+          </p>
+        </CardContent>
+      </Card>
+      
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MonitorPlay className="h-6 w-6 text-primary" />
+            <CardTitle>3. Using Your Verification Code (Future Desktop App)</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+           <p>
+            Once you have your verification code from this web app, you'll use it in the upcoming TicketSwift desktop application.
+          </p>
+          <p>
+            The desktop application will handle the automated ticket purchasing process for the specific event tied to your code.
+          </p>
+           <p className="text-sm text-muted-foreground">
+            Details about the desktop application will be provided when it's available.
+          </p>
+        </CardContent>
+      </Card>
+
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-6 w-6 text-primary" />
+            <CardTitle>4. OpenAI API Key Setup</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p>
+            Some AI features (like the AI Seat Predictor, intended for future event-specific integration) may require an OpenAI API Key.
           </p>
           <p>
             To add or update your API key:
@@ -39,66 +108,19 @@ export default function HowToUsePage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Ticket className="h-6 w-6 text-primary" /> {/* Changed icon */}
-            <CardTitle>2. Browsing and Understanding Events</CardTitle> {/* Updated title */}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p>
-            The <Link href="/" className="text-primary hover:underline font-medium">Dashboard</Link> displays featured events. Each event card shows the name, image, price, and a brief description.
-          </p>
-          <p>
-            Admins can manage these events (add, edit, delete) via the <Link href="/admin/events" className="text-primary hover:underline font-medium">Admin Panel</Link>.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Clicking "View Details" on an event card will (in a future version) take you to a page with more information and purchasing options for that specific event.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card className="shadow-lg">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Lightbulb className="h-6 w-6 text-primary" />
-            <CardTitle>3. AI Seat Predictor (Future Integration)</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <p>
-            The AI Seat Predictor is a powerful tool designed to help you find the best seats for a specific event based on historical data and your preferences.
-          </p>
-          <p>
-            This functionality is envisioned to be integrated directly within each event's detail page in a future version, rather than being a standalone page.
-            You would typically:
-          </p>
-          <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Navigate to the specific event you are interested in (from the main event list).</li>
-            <li>On the event's detail page, look for an "AI Seat Prediction" or similar section/button.</li>
-            <li>Provide any required event-specific details (if prompted).</li>
-            <li>Receive AI-driven seat recommendations for that particular event.</li>
-          </ol>
-           <p className="text-sm text-muted-foreground">
-            The standalone <code className="bg-muted px-1 py-0.5 rounded">/seat-predictor</code> page has been kept in the codebase for development and testing but is not part of the primary user navigation.
-          </p>
-        </CardContent>
-      </Card>
-      
-       <Card className="shadow-lg" id="loyalty-info">
+      <Card className="shadow-lg" id="loyalty-info">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Star className="h-6 w-6 text-primary" />
-            <CardTitle>4. Loyalty Points</CardTitle> 
+            <CardTitle>5. Loyalty Points</CardTitle> 
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <p>
-            As you use TicketSwift (simulated actions), you'll accumulate Loyalty Points! These points can be used for future benefits.
+            As you obtain verification codes (simulated purchases), you'll accumulate Loyalty Points! These points can be used for future benefits.
           </p>
           <p>
-            You can see your current points balance in the header, next to the theme toggle, when you are logged in.
+            You can see your current points balance in the header (top right), next to the theme toggle, when you are logged in.
           </p>
            <p className="text-sm text-muted-foreground">
             The loyalty program is currently in a conceptual phase. More details on rewards and redemption will be available soon.
@@ -112,8 +134,8 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent>
             <ul className="list-disc list-inside space-y-1">
-                <li>Keep your OpenAI API Key confidential.</li>
-                <li>For admins: Ensure event details (name, price, image URL) are accurate for the best display.</li>
+                <li>Keep your OpenAI API Key confidential if you use one.</li>
+                <li>For admins: Ensure event details (name, price, image URL, dates) are accurate.</li>
                 <li>Explore all sections of the app using the sidebar navigation.</li>
                 <li>Use the light/dark mode toggle (moon/sun icon in the header) to suit your preference.</li>
             </ul>
