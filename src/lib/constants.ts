@@ -4,15 +4,15 @@ import {
   KeyRound,
   Lightbulb,
   BarChart3,
-  ShieldCheck,
-  Ticket,
-  Star,
+  // ShieldCheck, // Not used directly in NAV_ITEMS, consider removing if not used elsewhere
+  // Ticket, // Not used directly in NAV_ITEMS
+  // Star, // Not used directly in NAV_ITEMS
   Settings,
   LayoutDashboard,
-  ScanText,
+  // ScanText, // Not used directly in NAV_ITEMS
   Users,
   Briefcase,
-  CreditCard
+  // CreditCard // Not used directly in NAV_ITEMS
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -46,12 +46,12 @@ export const NAV_ITEMS: NavItem[] = [
   {
     title: "Modules",
     href: "/modules",
-    icon: Briefcase, // Using Briefcase as a more generic icon for modules
+    icon: Briefcase, 
     tooltip: "Manage Modules",
   },
   {
     title: "Admin",
-    href: "/admin",
+    href: "/admin", // This now points to the admin hub page
     icon: Settings,
     adminOnly: true,
     tooltip: "Admin Panel",
