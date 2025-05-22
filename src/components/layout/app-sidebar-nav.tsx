@@ -10,19 +10,18 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarHeader,
-  useSidebar, // Removed other unused imports like SidebarGroupLabel, SidebarGroup
+  useSidebar,
   SidebarContent,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button"; // Added Button
+// Button removed as it's not used to wrap SidebarHeader content anymore
 import { AppLogo } from "@/components/icons/app-logo";
-// Separator removed as it's not used directly here
 import { useAuth } from "@/contexts/auth-context";
 
 export function AppSidebarNav() {
   const pathname = usePathname();
   const { isAdmin, user } = useAuth();
-  const { toggleSidebar, isMobile: sidebarIsMobile, setOpenMobile, state: sidebarState } = useSidebar();
+  const { isMobile: sidebarIsMobile, setOpenMobile, state: sidebarState } = useSidebar(); // toggleSidebar removed
 
   const handleLinkClick = () => {
     if (sidebarIsMobile) {
@@ -39,21 +38,21 @@ export function AppSidebarNav() {
 
   return (
     <>
-      <SidebarHeader className="border-b">
-        <Button
-          variant="ghost"
-          onClick={toggleSidebar}
+      {/* SidebarHeader now acts as a container, its height is h-16 to match AppHeader */}
+      <SidebarHeader className="border-b h-16 flex items-center">
+        <div
           className={cn(
-            "flex w-full items-center gap-2 text-left h-auto justify-start focus-visible:ring-inset focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
-            sidebarState === 'collapsed' ? "px-1 py-2 justify-center" : "px-2 py-[0.6rem]" // Adjusted padding for collapsed state
+            "flex w-full items-center gap-2 text-left",
+            // Adjust padding based on collapsed state for logo centering
+            sidebarState === 'collapsed' ? "justify-center px-1" : "justify-start px-4" // px-4 to match AppHeader horizontal padding
           )}
-          aria-label="Toggle sidebar"
         >
           <AppLogo className="h-8 w-8 text-primary flex-shrink-0" />
-          <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden text-foreground">
+          {/* Text is hidden when sidebar is collapsed via icon */}
+          <h1 className="text-lg font-bold group-data-[collapsible=icon]:hidden text-foreground">
             TicketSwift
           </h1>
-        </Button>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
