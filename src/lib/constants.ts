@@ -4,12 +4,12 @@ import {
   KeyRound,
   Lightbulb,
   BarChart3,
-  Settings as SettingsIcon, // Renamed to avoid conflict
+  Settings as SettingsIcon, 
   LayoutDashboard,
   Users,
   Briefcase,
-  BookOpenText, // New icon for How to Use
-  SlidersHorizontal // New icon for Settings
+  BookOpenText, 
+  SlidersHorizontal 
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -40,12 +40,12 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Lightbulb,
     tooltip: "AI Seat Predictor",
   },
-  {
-    title: "Success Report",
-    href: "/success-report",
-    icon: BarChart3,
-    tooltip: "Success Rate Report",
-  },
+  // {
+  //   title: "Success Report",
+  //   href: "/success-report",
+  //   icon: BarChart3,
+  //   tooltip: "Success Rate Report",
+  // },
   {
     title: "Modules",
     href: "/modules",
@@ -128,3 +128,5 @@ export const MOCK_MODULES: ModuleItem[] = [
     { id: "mod2", name: "Priority Queue Access", description: "Get ahead in virtual queues for high-demand events.", activated: true },
     { id: "mod3", name: "Automated CAPTCHA Solver Tier 2", description: "Faster and more reliable CAPTCHA solving.", activated: false },
 ];
+
+// Removed LoyaltyPage specific consts as page is removed
