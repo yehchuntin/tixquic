@@ -4,12 +4,10 @@
 import Link from "next/link";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AuthButton } from "@/components/auth/auth-button";
-import { AppLogo } from "@/components/icons/app-logo";
 import { Button } from "@/components/ui/button";
-import { Moon, Sun, Star } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { HeaderLoyaltyPoints } from "./header-loyalty-points";
-
 
 export function AppHeader() {
   const [mounted, setMounted] = useState(false);
@@ -38,17 +36,17 @@ export function AppHeader() {
   };
 
   if (!mounted) {
-    return ( 
-        <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
-            <div className="flex items-center gap-2">
-                <SidebarTrigger />
-                 {/* Removed AppLogo and TicketSwift text link from here */}
-            </div>
-            <div className="flex items-center gap-2 sm:gap-4">
-                {/* Placeholder for Loyalty */}
-                {/* Placeholder for Theme Toggle */}
-                {/* Placeholder for AuthButton */}
-            </div>
+    return (
+      <header className="sticky top-0 z-50 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
+        <div className="flex items-center gap-2">
+          <SidebarTrigger />
+          {/* Placeholder for title */}
+        </div>
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Placeholder for Loyalty */}
+          {/* Placeholder for Theme Toggle */}
+          {/* Placeholder for AuthButton */}
+        </div>
       </header>
     );
   }
@@ -57,7 +55,9 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur-md md:px-6">
       <div className="flex items-center gap-2">
         <SidebarTrigger />
-        {/* Removed AppLogo and TicketSwift text link from here. Logo is in sidebar header. */}
+        <Link href="/" className="text-lg font-bold text-foreground hover:text-primary transition-colors">
+          TicketSwift
+        </Link>
       </div>
       <div className="flex items-center gap-2 sm:gap-4">
         <HeaderLoyaltyPoints />

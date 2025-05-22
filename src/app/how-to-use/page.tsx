@@ -1,6 +1,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpenText, Lightbulb, BarChart3, Briefcase, KeyRound, Settings, Star } from "lucide-react";
+import { BookOpenText, Lightbulb, Briefcase, KeyRound, Settings, Star } from "lucide-react";
 import Link from "next/link";
 
 export default function HowToUsePage() {
@@ -43,21 +43,25 @@ export default function HowToUsePage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Lightbulb className="h-6 w-6 text-primary" />
-            <CardTitle>2. Using the AI Seat Predictor</CardTitle>
+            <CardTitle>2. Understanding the AI Seat Predictor</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <p>
-            The AI Seat Predictor helps you find the best seats based on historical data and your preferences for a specific event.
+            The AI Seat Predictor is a powerful tool designed to help you find the best seats for a specific event based on historical data and your preferences.
+          </p>
+          <p>
+            While there isn't a general "Seat Predictor" page in the main navigation, this functionality is envisioned to be integrated directly within each event's detail page in a future version.
+            You would typically:
           </p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Go to the <Link href="/seat-predictor" className="text-primary hover:underline font-medium">Seat Predictor</Link> page (accessible from the sidebar).</li>
-            <li>Fill in the required information: Seating Chart Data, Historical Success Rates, and your Desired Location for the event you are interested in.</li>
-            <li>Click "Predict Optimal Seats".</li>
-            <li>The AI will analyze the data and provide you with predicted optimal seats and the success probability for your desired location.</li>
+            <li>Navigate to the specific event you are interested in.</li>
+            <li>Look for an "AI Seat Prediction" or similar section/button.</li>
+            <li>Provide any required event-specific details (if prompted, though much data might be pre-filled).</li>
+            <li>Receive AI-driven seat recommendations for that particular event.</li>
           </ol>
            <p className="text-sm text-muted-foreground">
-            In a future version, this predictor might be integrated directly into each event's detail page.
+            The standalone <code className="bg-muted px-1 py-0.5 rounded">/seat-predictor</code> page has been kept in the codebase for development and testing purposes, but is not part of the primary user navigation.
           </p>
         </CardContent>
       </Card>
@@ -71,13 +75,26 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent className="space-y-2">
           <p>
-            Activate or deactivate additional features (modules) to enhance your TicketSwift experience. These modules can provide specialized functionalities.
+            "Modules" in TicketSwift represent optional add-on features or enhanced capabilities that you can activate to tailor the app to your needs. Think of them as power-ups for your ticket-snatching efforts!
           </p>
+          <p>
+            For example, a module might provide:
+          </p>
+          <ul className="list-disc list-inside space-y-1 pl-4">
+            <li>More advanced AI algorithms for seat prediction.</li>
+            <li>Access to priority queues for high-demand events.</li>
+            <li>Specialized tools for specific types of ticket sales.</li>
+          </ul>
+          <p>To manage your modules:</p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Go to the <Link href="/modules" className="text-primary hover:underline font-medium">Modules</Link> page.</li>
-            <li>For inactive modules, enter an access key (for this prototype, "VALIDKEY" works for demonstration) and click "Activate Module".</li>
-            <li>Activated modules will enhance your app experience.</li>
+            <li>Go to the <Link href="/modules" className="text-primary hover:underline font-medium">Modules</Link> page from the sidebar.</li>
+            <li>You'll see a list of available modules and their status (active/inactive).</li>
+            <li>For inactive modules, you might need an access key to activate them. (For this prototype, "VALIDKEY" can be used for demonstration).</li>
+            <li>Enter the key and click "Activate Module".</li>
           </ol>
+           <p className="text-sm text-muted-foreground">
+            Activated modules can provide specific advantages or unlock new functionalities within TicketSwift.
+          </p>
         </CardContent>
       </Card>
 
@@ -100,7 +117,6 @@ export default function HowToUsePage() {
           </p>
         </CardContent>
       </Card>
-
 
       <Card className="shadow-lg">
         <CardHeader>

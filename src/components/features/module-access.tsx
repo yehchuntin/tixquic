@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, XCircle, Lock, Unlock, Briefcase } from "lucide-react";
+import { CheckCircle2, XCircle, Lock, Unlock, Briefcase, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export function ModuleAccess() {
   const [modules, setModules] = useState<ModuleItem[]>(MOCK_MODULES);
@@ -43,14 +44,25 @@ export function ModuleAccess() {
 
   return (
     <div className="space-y-8">
-        <div className="flex items-center gap-3 mb-6">
-            <Briefcase className="h-10 w-10 text-primary"/>
-            <h1 className="text-3xl font-bold">Module Management</h1>
-        </div>
+      <div className="flex items-center gap-3 mb-2">
+        <Briefcase className="h-10 w-10 text-primary"/>
+        <h1 className="text-3xl font-bold">Module Management</h1>
+      </div>
+      <CardDescription className="text-lg mb-6 -mt-6">
+        Activate or deactivate optional features and enhancements for your TicketSwift experience.
+      </CardDescription>
       
+      <Alert variant="default" className="bg-accent/10 border-accent/50">
+        <Info className="h-4 w-4" />
+        <AlertTitle>What are Modules?</AlertTitle>
+        <AlertDescription>
+          Modules are like add-ons or power-ups that provide specialized functionalities or advantages within TicketSwift. Some might require an access key for activation (for this prototype, "VALIDKEY" works for demonstration).
+        </AlertDescription>
+      </Alert>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {modules.map((moduleItem) => (
-          <Card key={moduleItem.id} className={`shadow-lg transition-all ${moduleItem.activated ? 'border-green-500' : 'border-border'}`}>
+          <Card key={moduleItem.id} className={`shadow-lg transition-all flex flex-col ${moduleItem.activated ? 'border-green-500' : 'border-border'}`}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xl flex items-center gap-2">
@@ -69,39 +81,45 @@ export function ModuleAccess() {
               </div>
               <CardDescription className="pt-2">{moduleItem.description}</CardDescription>
             </CardHeader>
-            {!moduleItem.activated && (
-              <>
-                <CardContent>
-                    <Separator className="my-3"/>
-                    <Label htmlFor={`accessKey-${moduleItem.id}`} className="text-sm font-medium">Access Key</Label>
-                    <Input
-                      id={`accessKey-${moduleItem.id}`}
-                      type="text"
-                      placeholder="Enter access key"
-                      className="mt-1"
-                      value={selectedModuleId === moduleItem.id ? accessKey : ""}
-                      onChange={(e) => {
-                        setAccessKey(e.target.value);
-                        setSelectedModuleId(moduleItem.id);
-                      }}
-                    />
-                </CardContent>
-                <CardFooter>
-                  <Button 
-                    className="w-full" 
-                    onClick={() => handleActivateModule(moduleItem.id)}
-                    disabled={selectedModuleId === moduleItem.id && !accessKey.trim()}
-                  >
-                    Activate Module
-                  </Button>
-                </CardFooter>
-              </>
-            )}
-             {moduleItem.activated && (
-                <CardContent>
-                    <p className="text-sm text-green-600">This module is currently active and enhancing your TicketSwift experience.</p>
-                </CardContent>
-             )}
+            
+            <div className="mt-auto"> {/* Pushes content below to the bottom */}
+              {!moduleItem.activated && (
+                <>
+                  <CardContent>
+                      <Separator className="my-3"/>
+                      <Label htmlFor={`accessKey-${moduleItem.id}`} className="text-sm font-medium">Access Key</Label>
+                      <Input
+                        id={`accessKey-${moduleItem.id}`}
+                        type="text"
+                        placeholder="Enter access key"
+                        className="mt-1"
+                        value={selectedModuleId === moduleItem.id ? accessKey : ""}
+                        onChange={(e) => {
+                          setAccessKey(e.target.value);
+                          setSelectedModuleId(moduleItem.id);
+                        }}
+                      />
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      className="w-full" 
+                      onClick={() => handleActivateModule(moduleItem.id)}
+                      disabled={selectedModuleId === moduleItem.id && !accessKey.trim()}
+                    >
+                      Activate Module
+                    </Button>
+                  </CardFooter>
+                </>
+              )}
+              {moduleItem.activated && (
+                  <CardContent>
+                      <Separator className="my-3"/>
+                      <p className="text-sm text-green-600 flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4"/>This module is currently active.
+                      </p>
+                  </CardContent>
+              )}
+            </div>
           </Card>
         ))}
       </div>
