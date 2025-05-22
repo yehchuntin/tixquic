@@ -56,7 +56,7 @@ const eventSchemaBase = z.object({
   onSaleDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid on-sale date format."),
   endDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid end date format."),
   price: z.coerce.number().positive("Price must be a positive number."),
-  pointsAwarded: z.coerce.number().int().nonnegative("Points awarded must be a non-negative integer.").optional(),
+  pointsAwarded: z.coerce.number().int().nonnegative("Points awarded must be a non-negative integer.").optional().default(0),
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
@@ -135,7 +135,7 @@ export function EventManager() {
     setIsLoadingEvents(true);
     const eventsCollectionRef = collection(db, "events");
     
-    const unsubscribe = onSnapshot(eventsCollectionRef, (snapshot) => {
+    const unsubscribe = onSnapshot(query(eventsCollectionRef), (snapshot) => { // Added query() for clarity if ordering/filtering is added later
       const fetchedEvents = snapshot.docs.map(doc => {
         const data = doc.data();
         const onSaleDateString = data.onSaleDate instanceof Timestamp 
@@ -149,7 +149,7 @@ export function EventManager() {
             ...data,
             onSaleDate: onSaleDateString,
             endDate: endDateString,
-            pointsAwarded: data.pointsAwarded || 0, // Ensure pointsAwarded has a default
+            pointsAwarded: data.pointsAwarded || 0,
         } as TicketEvent;
       }).sort((a, b) => new Date(b.onSaleDate).getTime() - new Date(a.onSaleDate).getTime());
       setEvents(fetchedEvents);
@@ -211,7 +211,7 @@ export function EventManager() {
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!window.confirm("Are you sure you want to delete this event? This will NOT delete associated verification codes.")) return;
+    // Confirmation is now handled by AlertDialog
     try {
       await deleteDoc(doc(db, "events", eventId));
       toast({ title: "Event Deleted", description: "The event has been removed from Firestore." });
@@ -239,7 +239,7 @@ export function EventManager() {
         await updateDoc(eventRef, eventDataToSave);
         toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
       } else {
-        const newEventId = \`evt\${Date.now()}\`;
+        const newEventId = `evt${Date.now()}`;
         const newEventRef = doc(db, "events", newEventId);
         await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
         toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
@@ -256,18 +256,19 @@ export function EventManager() {
 
   const handleCleanUpExpiredVerifications = async () => {
     setIsCleaningUp(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date(); // Use full Date object for comparison
+    today.setHours(0,0,0,0); // Normalize to start of day
     let deletedCount = 0;
 
     try {
       const eventsQuery = query(collection(db, "events"));
       const eventsSnapshot = await getDocs(eventsQuery);
-      const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TicketEvent));
+      const allEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as TicketEvent));
 
       const pastEvents = allEvents.filter(event => {
         const eventEndDate = new Date(event.endDate);
-        const todayDate = new Date(today);
-        return eventEndDate < todayDate;
+        eventEndDate.setHours(23,59,59,999); // Consider event ended at the end of its endDate
+        return eventEndDate < today;
       });
 
       if (pastEvents.length === 0) {
@@ -292,7 +293,7 @@ export function EventManager() {
 
       if (deletedCount > 0) {
         await batch.commit();
-        toast({ title: "Cleanup Successful", description: \`Successfully deleted \${deletedCount} verification codes for past events.\` });
+        toast({ title: "Cleanup Successful", description: `Successfully deleted ${deletedCount} verification codes for past events.` });
       } else {
         toast({ title: "No Codes to Clean", description: "No verification codes found for past events." });
       }
@@ -471,10 +472,28 @@ export function EventManager() {
                     <Edit className="h-4 w-4" />
                     <span className="sr-only">Edit</span>
                   </Button>
-                  <Button variant="destructive" size="icon" onClick={() => handleDeleteEvent(event.id)} disabled={isSubmitting || isCleaningUp}>
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="destructive" size="icon" disabled={isSubmitting || isCleaningUp}>
+                        <Trash2 className="h-4 w-4" />
+                         <span className="sr-only">Delete</span>
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete the event &quot;{event.name}&quot; from Firestore. This does NOT delete associated user verification codes.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteEvent(event.id)} className="bg-destructive hover:bg-destructive/90">
+                          Yes, delete event
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TableCell>
               </TableRow>
             );
