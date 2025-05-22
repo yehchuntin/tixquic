@@ -1,5 +1,5 @@
 
-"use client"; // Make this a Client Component
+"use client"; 
 
 import type { Metadata, ResolvingMetadata } from 'next';
 import { doc, getDoc, Timestamp } from 'firebase/firestore';
@@ -9,34 +9,19 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react'; // Import useState and useEffect
-import { LoadingSpinner } from '@/components/shared/loading-spinner'; // For loading state
+import { useEffect, useState } from 'react'; 
+import { LoadingSpinner } from '@/components/shared/loading-spinner'; 
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/contexts/auth-context';
 
 interface EventDetailPageProps {
   params: { id: string };
 }
-
-// Metadata generation remains a server-side capability
-// export async function generateMetadata(
-//   { params }: EventDetailPageProps,
-//   parent: ResolvingMetadata
-// ): Promise<Metadata> {
-//   const event = await getEvent(params.id); // This function needs to be defined if used here
-//   const previousTitle = (await parent).title?.absolute || "TicketSwift";
-
-//   if (!event) {
-//     return {
-//       title: `Event Not Found | ${previousTitle}`,
-//     };
-//   }
-
-//   return {
-//     title: `${event.name} | ${previousTitle}`,
-//     description: event.description || `Details for ${event.name}`,
-//   };
-// }
 
 const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } => {
   const today = new Date();
@@ -55,14 +40,31 @@ const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'
   return { text: "Upcoming", variant: "secondary", isActionable: false };
 };
 
+const generateRandomAlphanumeric = (length: number): string => {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+};
+
 export default function EventDetailPage({ params }: EventDetailPageProps) {
   const [event, setEvent] = useState<TicketEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<{ text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } | null>(null);
-  const [flowStep, setFlowStep] = useState<'initial' | 'verification'>('initial');
+  
+  const { toast } = useToast();
+  const { user } = useAuth(); // Get current user
+
+  // State for the ticket flow
+  const [flowStep, setFlowStep] = useState<'initial' | 'verification' | 'payment' | 'purchased'>('initial');
+  const [verificationCode, setVerificationCode] = useState<string | null>(null);
+  const [showVerificationCode, setShowVerificationCode] = useState(false);
+  const [hasAlreadyPurchased, setHasAlreadyPurchased] = useState(false); // Mock state
 
   useEffect(() => {
-    const fetchEvent = async () => {
+    const fetchEventAndPurchaseStatus = async () => {
       setLoading(true);
       try {
         const eventDocRef = doc(db, 'events', params.id);
@@ -70,7 +72,6 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
         if (eventSnap.exists()) {
           const data = eventSnap.data();
-          // Convert Firestore Timestamps to YYYY-MM-DD strings
           const onSaleDateString = data.onSaleDate instanceof Timestamp 
             ? data.onSaleDate.toDate().toISOString().split('T')[0] 
             : data.onSaleDate;
@@ -85,7 +86,20 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
             endDate: endDateString,
           } as TicketEvent;
           setEvent(fetchedEvent);
-          setStatus(getEventDisplayStatus(fetchedEvent));
+          const currentStatus = getEventDisplayStatus(fetchedEvent);
+          setStatus(currentStatus);
+
+          // MOCK: Simulate checking if user already purchased
+          // In a real app, query Firestore: users/{userId}/eventVerifications/{eventId}
+          if (user && params.id === "evt1_mock_on_sale") { // Example: user bought event with this ID
+            // setHasAlreadyPurchased(true);
+            // setVerificationCode("MOCKPURCHASED123"); // Load their existing code
+            // setFlowStep('purchased');
+          } else {
+            // For testing the new flow directly if not "already purchased"
+             // setFlowStep('initial'); 
+          }
+
         } else {
           setEvent(null);
           setStatus(null);
@@ -100,9 +114,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     };
 
     if (params.id) {
-      fetchEvent();
+      fetchEventAndPurchaseStatus();
     }
-  }, [params.id]);
+  }, [params.id, user]); // Add user to dependency array for purchase check
 
   useEffect(() => {
     if (event && event.name) {
@@ -112,6 +126,45 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     }
   }, [event, loading]);
 
+  const handleTicketAction = async () => {
+    if (!user) {
+        toast({ title: "Authentication Required", description: "Please log in to get tickets.", variant: "destructive"});
+        return;
+    }
+
+    if (flowStep === 'initial' && status?.isActionable) {
+      // Generate and "store" verification code
+      const code = generateRandomAlphanumeric(16);
+      setVerificationCode(code);
+      setFlowStep('verification');
+      // TODO: In a real app, save this code to Firestore associated with user & event
+      // e.g., await setDoc(doc(db, `users/${user.uid}/eventVerifications`, event.id), { code, eventName: event.name, purchaseDate: serverTimestamp() });
+      toast({ title: "Verification Code Generated!", description: "Proceed to the next step." });
+    } else if (flowStep === 'verification' && status?.isActionable) {
+      // This is where you would initiate the actual payment process
+      setFlowStep('payment'); // Move to a payment step (placeholder)
+      toast({title: "Payment Step", description: "Redirecting to payment gateway... (placeholder)"});
+      // Simulate payment success for now
+      setTimeout(() => {
+        toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
+        setFlowStep('purchased'); // Mark as purchased
+        setHasAlreadyPurchased(true); // For future page loads
+      }, 2000);
+    }
+  };
+
+  const copyToClipboard = () => {
+    if (verificationCode) {
+      navigator.clipboard.writeText(verificationCode)
+        .then(() => {
+          toast({ title: "Copied!", description: "Verification code copied to clipboard." });
+        })
+        .catch(err => {
+          toast({ title: "Copy Failed", description: "Could not copy code.", variant: "destructive" });
+          console.error('Failed to copy: ', err);
+        });
+    }
+  };
 
   if (loading) {
     return (
@@ -145,15 +198,19 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     );
   }
 
-  const handleTicketAction = () => {
-    if (flowStep === 'initial' && status.isActionable) {
-      setFlowStep('verification');
-      // In a real app, you might trigger an API call or some preparation here.
-    } else if (flowStep === 'verification' && status.isActionable) {
-      // This is where you would initiate the actual verification number process
-      alert("Initiating verification number process... (placeholder)");
-    }
+  const mainButtonText = () => {
+    if (hasAlreadyPurchased || flowStep === 'purchased') return "Code Obtained";
+    if (flowStep === 'initial') return "Get Tickets Now";
+    if (flowStep === 'verification') return "Get Verification Number"; // Or "Proceed to Payment"
+    if (flowStep === 'payment') return "Processing Payment...";
+    return "Tickets Unavailable";
   };
+
+  const isButtonDisabled = () => {
+    if (hasAlreadyPurchased || flowStep === 'purchased' || flowStep === 'payment') return true;
+    return !status.isActionable;
+  };
+
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -172,8 +229,8 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
             <Image
               src={event.imageUrl}
               alt={event.name}
-              fill // Use fill instead of layout="fill"
-              style={{ objectFit: "cover" }} // Use style for objectFit
+              fill 
+              style={{ objectFit: "cover" }} 
               data-ai-hint={event.dataAiHint || "event highlight"}
               priority 
             />
@@ -250,16 +307,51 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
                 </div>
             </div>
             
+            {hasAlreadyPurchased && (
+              <Alert variant="default" className="bg-green-50 border-green-200 text-green-700">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertTitle className="font-semibold">Already Obtained</AlertTitle>
+                <AlertDescription>
+                  You have already obtained a verification code for this event.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {(flowStep === 'verification' || flowStep === 'purchased' || hasAlreadyPurchased) && verificationCode && (
+              <Card className="bg-secondary/20 border-primary/30">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center text-primary/90">
+                    Your Verification Code
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="verificationCode"
+                      type={showVerificationCode ? "text" : "password"}
+                      value={verificationCode}
+                      readOnly
+                      className="font-mono text-sm"
+                    />
+                    <Button variant="ghost" size="icon" onClick={() => setShowVerificationCode(!showVerificationCode)} aria-label={showVerificationCode ? "Hide code" : "Show code"}>
+                      {showVerificationCode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </Button>
+                    <Button variant="outline" size="icon" onClick={copyToClipboard} aria-label="Copy code">
+                      <Copy className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             <Button 
               size="lg" 
               className="w-full text-lg py-3" 
-              disabled={!status.isActionable}
+              disabled={isButtonDisabled()}
               onClick={handleTicketAction}
             >
               <Ticket className="mr-2 h-5 w-5" />
-              {status.isActionable 
-                ? (flowStep === 'initial' ? "Get Tickets Now" : "Get Verification Number") 
-                : (status.text === "Upcoming" ? "Tickets Not Yet Available" : "Tickets Unavailable")}
+              {mainButtonText()}
             </Button>
             
             <Card className="mt-8 bg-secondary/20 border-primary/30">
@@ -279,3 +371,4 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     </div>
   );
 }
+
