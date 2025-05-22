@@ -25,58 +25,78 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import Image from "next/image"; // For displaying image previews
-import { Card } from "@/components/ui/card"; // Card for better layout
+import Image from "next/image";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-const eventSchema = z.object({
+const eventSchemaBase = z.object({
   id: z.string().optional(),
   name: z.string().min(3, "Event name must be at least 3 characters."),
-  date: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid date format."),
   venue: z.string().min(3, "Venue name must be at least 3 characters."),
-  status: z.enum(["Upcoming", "On Sale", "Sold Out", "Past"]),
+  onSaleDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid on-sale date format."),
+  endDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid end date format."),
   price: z.coerce.number().positive("Price must be a positive number."),
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
 });
 
+const eventSchema = eventSchemaBase.refine(
+  (data) => {
+    if (data.onSaleDate && data.endDate) {
+      return new Date(data.endDate) > new Date(data.onSaleDate);
+    }
+    return true;
+  },
+  {
+    message: "End date must be after the on-sale date.",
+    path: ["endDate"], // Path of the error
+  }
+);
+
 type EventFormValues = z.infer<typeof eventSchema>;
+
+const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive" } => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const onSale = new Date(event.onSaleDate);
+  onSale.setHours(0,0,0,0);
+  const end = new Date(event.endDate);
+  end.setHours(0,0,0,0);
+
+  if (today >= end) {
+    return { text: "Past", variant: "destructive" };
+  }
+  if (today >= onSale) {
+    return { text: "On Sale", variant: "default" };
+  }
+  return { text: "Upcoming", variant: "secondary" };
+};
+
 
 export function EventManager() {
   const { isAdmin, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [events, setEvents] = useState<TicketEvent[]>([]); // Initialize with empty array
+  const [events, setEvents] = useState<TicketEvent[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<TicketEvent | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Simulate fetching events or use MOCK_EVENTS for initialization
-    // In a real app, this would be an API call.
-    // For this prototype, we'll initialize with MOCK_EVENTS and allow manipulation.
     setEvents(MOCK_EVENTS);
   }, []);
-
 
   const {
     register,
     handleSubmit,
     reset,
-    setValue,
     watch,
     formState: { errors },
   } = useForm<EventFormValues>({
@@ -86,6 +106,8 @@ export function EventManager() {
       imageUrl: "",
       description: "",
       dataAiHint: "",
+      onSaleDate: new Date().toISOString().split('T')[0], // Default to today
+      endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0], // Default to a week from today
     }
   });
 
@@ -105,7 +127,19 @@ export function EventManager() {
 
   const handleAddEvent = () => {
     setEditingEvent(null);
-    reset({ id: undefined, name: "", date: "", venue: "", status: "Upcoming", price: 0, imageUrl: "", description: "", dataAiHint: "" });
+    const today = new Date().toISOString().split('T')[0];
+    const weekLater = new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0];
+    reset({ 
+      id: undefined, 
+      name: "", 
+      venue: "", 
+      onSaleDate: today, 
+      endDate: weekLater, 
+      price: 0, 
+      imageUrl: "", 
+      description: "", 
+      dataAiHint: "" 
+    });
     setIsDialogOpen(true);
   };
 
@@ -116,8 +150,6 @@ export function EventManager() {
   };
 
   const handleDeleteEvent = (eventId: string) => {
-    // In a real app, this would also call an API.
-    // For prototype, we filter the state.
     setEvents(prevEvents => prevEvents.filter((event) => event.id !== eventId));
     toast({ title: "Event Deleted", description: "The event has been successfully removed from the list." });
   };
@@ -150,12 +182,11 @@ export function EventManager() {
     );
   }
 
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold flex items-center gap-2">
-          <Settings className="h-8 w-8 text-primary" /> Event Management
+          <CalendarDays className="h-8 w-8 text-primary" /> Event Management
         </h2>
         <Button onClick={handleAddEvent}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Event
@@ -163,7 +194,7 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-lg"> {/* Increased width for more fields */}
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
@@ -178,9 +209,15 @@ export function EventManager() {
             </div>
             
             <div>
-              <Label htmlFor="date">Date</Label>
-              <Input id="date" type="date" {...register("date")} />
-              {errors.date && <p className="text-sm text-destructive">{errors.date.message}</p>}
+              <Label htmlFor="onSaleDate">On Sale Date</Label>
+              <Input id="onSaleDate" type="date" {...register("onSaleDate")} />
+              {errors.onSaleDate && <p className="text-sm text-destructive">{errors.onSaleDate.message}</p>}
+            </div>
+
+            <div>
+              <Label htmlFor="endDate">End Date</Label>
+              <Input id="endDate" type="date" {...register("endDate")} />
+              {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
             </div>
 
             <div>
@@ -198,22 +235,6 @@ export function EventManager() {
               {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
             </div>
             
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select onValueChange={(value) => setValue("status", value as EventFormValues["status"])} defaultValue={editingEvent?.status || "Upcoming"}>
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Upcoming">Upcoming</SelectItem>
-                  <SelectItem value="On Sale">On Sale</SelectItem>
-                  <SelectItem value="Sold Out">Sold Out</SelectItem>
-                  <SelectItem value="Past">Past</SelectItem>
-                </SelectContent>
-              </Select>
-              {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
-            </div>
-
             <div className="md:col-span-2">
               <Label htmlFor="imageUrl">Image URL</Label>
               <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} />
@@ -254,15 +275,18 @@ export function EventManager() {
             <TableRow>
               <TableHead className="w-[100px]">Image</TableHead>
               <TableHead>Name</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>On Sale Date</TableHead>
+              <TableHead>End Date</TableHead>
               <TableHead>Venue</TableHead>
               <TableHead>Price</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead>Current Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {events.map((event) => (
+            {events.map((event) => {
+              const computedStatus = getEventComputedStatus(event);
+              return (
               <TableRow key={event.id}>
                 <TableCell>
                   {event.imageUrl ? (
@@ -276,19 +300,18 @@ export function EventManager() {
                   )}
                 </TableCell>
                 <TableCell className="font-medium">{event.name}</TableCell>
-                <TableCell>{new Date(event.date).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(event.onSaleDate).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(event.endDate).toLocaleDateString()}</TableCell>
                 <TableCell>{event.venue}</TableCell>
                 <TableCell>${event.price.toFixed(2)}</TableCell>
                 <TableCell>
-                  <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full
-                      ${event.status === "On Sale" ? "bg-green-100 text-green-700" : ""}
-                      ${event.status === "Upcoming" ? "bg-blue-100 text-blue-700" : ""}
-                      ${event.status === "Sold Out" ? "bg-red-100 text-red-700" : ""}
-                      ${event.status === "Past" ? "bg-gray-100 text-gray-700" : ""}`}
-                  >
-                    {event.status}
-                  </span>
+                  <Badge variant={computedStatus.variant} className={
+                      computedStatus.text === "On Sale" ? "bg-green-100 text-green-700" :
+                      computedStatus.text === "Upcoming" ? "bg-blue-100 text-blue-700" :
+                      computedStatus.text === "Past" ? "bg-red-100 text-red-700" : ""
+                  }>
+                    {computedStatus.text}
+                  </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)}>
@@ -301,7 +324,8 @@ export function EventManager() {
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+            );
+          })}
           </TableBody>
         </Table>
          {events.length === 0 && (

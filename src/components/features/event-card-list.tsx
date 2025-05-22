@@ -9,10 +9,40 @@ import { Badge } from "@/components/ui/badge";
 import { Ticket as TicketIcon, CalendarIcon, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+
+interface DisplayEvent extends TicketEvent {
+  effectiveStatus: "Upcoming" | "On Sale";
+}
 
 export function EventList() {
-  // In a real app, fetch events. For prototype, use MOCK_EVENTS.
-  const events = MOCK_EVENTS.filter(event => event.status === "On Sale" || event.status === "Upcoming"); // Display only active events
+  const [displayEvents, setDisplayEvents] = useState<DisplayEvent[]>([]);
+
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Compare date part only
+
+    const processedEvents = MOCK_EVENTS.map(event => {
+      const onSale = new Date(event.onSaleDate);
+      onSale.setHours(0,0,0,0);
+      const end = new Date(event.endDate);
+      end.setHours(0,0,0,0);
+
+      let effectiveStatus: "Upcoming" | "On Sale" | "Past";
+
+      if (today >= end) {
+        effectiveStatus = "Past";
+      } else if (today >= onSale) {
+        effectiveStatus = "On Sale";
+      } else {
+        effectiveStatus = "Upcoming";
+      }
+      return { ...event, effectiveStatus };
+    }).filter(event => event.effectiveStatus === "Upcoming" || event.effectiveStatus === "On Sale") as DisplayEvent[];
+    
+    setDisplayEvents(processedEvents);
+  }, []);
+
 
   return (
     <Card className="shadow-lg w-full">
@@ -21,15 +51,15 @@ export function EventList() {
           <TicketIcon className="h-6 w-6 text-primary" />
           <CardTitle>Featured Events</CardTitle>
         </div>
-        {events.length > 0 && <Badge variant="secondary">{events.length} Events</Badge>}
+        {displayEvents.length > 0 && <Badge variant="secondary">{displayEvents.length} Events</Badge>}
       </CardHeader>
       <CardContent>
-        {events.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">No upcoming events at the moment. Check back soon!</p>
+        {displayEvents.length === 0 ? (
+          <p className="text-muted-foreground text-center py-8">No upcoming or on-sale events at the moment. Check back soon!</p>
         ) : (
           <ScrollArea className="h-[500px] lg:h-auto lg:max-h-[calc(100vh-20rem)] pr-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((event) => (
+              {displayEvents.map((event) => (
                 <Card key={event.id} className="overflow-hidden transition-shadow hover:shadow-xl flex flex-col">
                   {event.imageUrl && (
                      <div className="relative h-48 w-full">
@@ -43,10 +73,22 @@ export function EventList() {
                     </div>
                   )}
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-xl leading-tight">{event.name}</CardTitle>
+                    <div className="flex justify-between items-start">
+                        <CardTitle className="text-xl leading-tight">{event.name}</CardTitle>
+                        <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
+                           className={
+                            event.effectiveStatus === "On Sale" ? "bg-green-100 text-green-700 border-green-200" :
+                            "bg-blue-100 text-blue-700 border-blue-200"
+                           }
+                        >
+                            {event.effectiveStatus}
+                        </Badge>
+                    </div>
                      <div className="flex items-center text-xs text-muted-foreground pt-1">
                         <CalendarIcon className="mr-1 h-3 w-3" />
-                        {new Date(event.date).toLocaleDateString()} &bull; {event.venue}
+                        {/* Display onSaleDate as the primary date if upcoming, or a range */}
+                        {event.effectiveStatus === "Upcoming" ? `Starts: ${new Date(event.onSaleDate).toLocaleDateString()}` : `On Sale Until: ${new Date(event.endDate).toLocaleDateString()}`}
+                        {' \u2022 '} {event.venue}
                     </div>
                   </CardHeader>
                   <CardContent className="flex-grow">
@@ -59,7 +101,7 @@ export function EventList() {
                         <DollarSign className="h-5 w-5 mr-1" />
                         {event.price.toFixed(2)}
                     </div>
-                    <Button asChild variant="outline" size="sm">
+                    <Button asChild variant="outline" size="sm" disabled={event.effectiveStatus === "Upcoming"}>
                       <Link href="#">
                         View Details
                       </Link>

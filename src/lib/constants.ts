@@ -8,7 +8,7 @@ import {
   Users,
   BookOpenText,
   SlidersHorizontal,
-  Ticket as TicketIcon, // Added for events
+  Ticket as TicketIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -33,8 +33,6 @@ export const NAV_ITEMS: NavItem[] = [
     icon: BookOpenText,
     tooltip: "Tutorial & Guides",
   },
-  // Seat Predictor removed from main navigation
-  // Modules page removed
   {
     title: "Settings",
     href: "/settings",
@@ -53,22 +51,29 @@ export const NAV_ITEMS: NavItem[] = [
 export type TicketEvent = {
   id: string;
   name: string;
-  date: string; // Keep date for event details
-  venue: string; // Keep venue for event details
-  status: "Upcoming" | "On Sale" | "Sold Out" | "Past"; // Keep status
+  venue: string;
+  onSaleDate: string; // Date when event becomes "On Sale"
+  endDate: string;    // Date when event is no longer visible/active
   price: number;
   imageUrl?: string;
   description?: string;
   dataAiHint?: string;
 };
 
+// Helper to generate dates for MOCK_EVENTS
+const getRelativeDate = (dayOffset: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + dayOffset);
+  return date.toISOString().split('T')[0]; // YYYY-MM-DD
+};
+
 export const MOCK_EVENTS: TicketEvent[] = [
   {
     id: "evt1",
     name: "Rock Legends Concert",
-    date: "2024-08-15",
     venue: "Stadium Arena",
-    status: "On Sale",
+    onSaleDate: getRelativeDate(-10), // Was on sale 10 days ago
+    endDate: getRelativeDate(5),      // Ends in 5 days
     price: 75.00,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Experience the titans of rock live in concert. A night to remember!",
@@ -77,9 +82,9 @@ export const MOCK_EVENTS: TicketEvent[] = [
   {
     id: "evt2",
     name: "Indie Fest 2024",
-    date: "2024-09-05",
     venue: "Green Park",
-    status: "Upcoming",
+    onSaleDate: getRelativeDate(7),   // Goes on sale in 7 days
+    endDate: getRelativeDate(14),     // Ends in 14 days
     price: 45.50,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Discover the best new indie bands at this year's Indie Fest.",
@@ -87,10 +92,10 @@ export const MOCK_EVENTS: TicketEvent[] = [
   },
   {
     id: "evt3",
-    name: "Classical Night with the Symphony",
-    date: "2024-07-25",
+    name: "Classical Night Symphony",
     venue: "Grand Theatre",
-    status: "Sold Out",
+    onSaleDate: getRelativeDate(20),  // Upcoming, on sale in 20 days
+    endDate: getRelativeDate(30),     // Ends in 30 days
     price: 90.00,
     imageUrl: "https://placehold.co/600x400.png",
     description: "An evening of breathtaking classical music performed by the world-renowned symphony orchestra.",
@@ -98,10 +103,10 @@ export const MOCK_EVENTS: TicketEvent[] = [
   },
   {
     id: "evt4",
-    name: "Pop Sensation World Tour",
-    date: "2024-06-10", // Past event
+    name: "Pop Sensation Live",
     venue: "City Center Hall",
-    status: "Past",
+    onSaleDate: getRelativeDate(-5), // On sale for 5 days
+    endDate: getRelativeDate(10),    // Ends in 10 days
     price: 120.00,
     imageUrl: "https://placehold.co/600x400.png",
     description: "The global pop superstar live on stage, performing all their biggest hits.",
@@ -110,18 +115,28 @@ export const MOCK_EVENTS: TicketEvent[] = [
   {
     id: "evt5",
     name: "Jazz Masters Quintet",
-    date: "2024-10-20",
     venue: "The Blue Note Club",
-    status: "On Sale",
+    onSaleDate: getRelativeDate(3), // Upcoming, on sale in 3 days
+    endDate: getRelativeDate(17),   // Ends in 17 days
     price: 60.00,
     imageUrl: "https://placehold.co/600x400.png",
     description: "An intimate evening with jazz legends. Limited seats available.",
     dataAiHint: "jazz band club"
   },
+  {
+    id: "evt6",
+    name: "Past Event Example",
+    venue: "Old Venue",
+    onSaleDate: getRelativeDate(-30), // Was on sale 30 days ago
+    endDate: getRelativeDate(-1),     // Ended yesterday
+    price: 50.00,
+    imageUrl: "https://placehold.co/600x400.png",
+    description: "This event has already passed and should not be visible.",
+    dataAiHint: "event archive"
+  }
 ];
 
-// Announcement type and MOCK_ANNOUNCEMENTS are effectively replaced by TicketEvent and MOCK_EVENTS for the homepage feed.
-// If separate announcements are still needed elsewhere, they can be re-added. For now, focusing on events.
+
 export type Announcement = {
   id: string;
   title: string;
@@ -132,8 +147,6 @@ export type Announcement = {
 };
 
 export const MOCK_ANNOUNCEMENTS: Announcement[] = [
-    // This data will now be sourced from MOCK_EVENTS for the homepage feed.
-    // Keeping structure for potential other uses of announcements.
   {
     id: "announce1",
     title: "Important Update",
