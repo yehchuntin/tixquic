@@ -112,74 +112,78 @@ export function EventList() {
           <ScrollArea className="h-auto max-h-[70vh] lg:max-h-[calc(100vh-22rem)] -mr-4 pr-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayEvents.map((event) => (
-                <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group hover:border-primary">
-                  {event.imageUrl ? (
-                     <div className="relative h-52 w-full overflow-hidden">
-                        <Image
-                        src={event.imageUrl}
-                        alt={event.name}
-                        fill
-                        style={{ objectFit: "cover" }}
-                        className="transition-transform duration-500 group-hover:scale-105"
-                        data-ai-hint={event.dataAiHint || "event image"}
-                        priority={displayEvents.indexOf(event) < 3} // Add priority to first few images
-                        />
-                         <div className="absolute top-2 right-2 z-10">
-                             <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
-                               className={
-                                event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
-                                "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
-                               }
-                            >
-                                {event.effectiveStatus}
-                            </Badge>
-                         </div>
-                    </div>
-                  ) : (
-                    <div className="relative h-52 w-full bg-muted flex items-center justify-center">
-                        <TicketIcon className="w-16 h-16 text-muted-foreground/50" />
-                        <div className="absolute top-2 right-2 z-10">
-                             <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
-                               className={
-                                event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
-                                "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
-                               }
-                            >
-                                {event.effectiveStatus}
-                            </Badge>
-                         </div>
-                    </div>
-                  )}
-                  <CardHeader className="pb-3 pt-4">
-                    <CardTitle className="text-xl leading-tight font-semibold group-hover:text-primary transition-colors">{event.name}</CardTitle>
-                     <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
-                        <div className="flex items-center">
-                            <CalendarIcon className="mr-1.5 h-4 w-4" />
-                            <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group hover:border-primary cursor-pointer">
+                  <Link href={`/event/${event.id}`} passHref legacyBehavior>
+                    <a className="flex flex-col h-full">
+                      {event.imageUrl ? (
+                         <div className="relative h-52 w-full overflow-hidden">
+                            <Image
+                            src={event.imageUrl}
+                            alt={event.name}
+                            fill
+                            style={{ objectFit: "cover" }}
+                            className="transition-transform duration-500 group-hover:scale-105"
+                            data-ai-hint={event.dataAiHint || "event image"}
+                            priority={displayEvents.indexOf(event) < 3} // Add priority to first few images
+                            />
+                             <div className="absolute top-2 right-2 z-10">
+                                 <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
+                                   className={
+                                    event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
+                                    "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
+                                   }
+                                >
+                                    {event.effectiveStatus}
+                                </Badge>
+                             </div>
                         </div>
-                        <span className="text-muted-foreground/50">|</span>
-                        <div className="flex items-center">
-                            <MapPin className="mr-1.5 h-4 w-4" />
-                            <span>{event.venue}</span>
+                      ) : (
+                        <div className="relative h-52 w-full bg-muted flex items-center justify-center">
+                            <TicketIcon className="w-16 h-16 text-muted-foreground/50" />
+                            <div className="absolute top-2 right-2 z-10">
+                                 <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
+                                   className={
+                                    event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
+                                    "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
+                                   }
+                                >
+                                    {event.effectiveStatus}
+                                </Badge>
+                             </div>
                         </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex-grow pb-3">
-                    {event.description && (
-                        <CardDescription className="text-sm line-clamp-3">{event.description}</CardDescription>
-                    )}
-                  </CardContent>
-                  <CardFooter className="flex items-center justify-between pt-4 mt-auto border-t">
-                    <div className="flex items-center text-xl font-bold text-primary">
-                        <DollarSign className="h-5 w-5 mr-1" />
-                        {event.price.toFixed(2)}
-                    </div>
-                    <Button asChild variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                      <Link href={`/event/${event.id}`}>
-                        View Details
-                      </Link>
-                    </Button>
-                  </CardFooter>
+                      )}
+                      <CardHeader className="pb-3 pt-4">
+                        <CardTitle className="text-xl leading-tight font-semibold group-hover:text-primary transition-colors">{event.name}</CardTitle>
+                         <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
+                            <div className="flex items-center">
+                                <CalendarIcon className="mr-1.5 h-4 w-4" />
+                                <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                            <span className="text-muted-foreground/50">|</span>
+                            <div className="flex items-center">
+                                <MapPin className="mr-1.5 h-4 w-4" />
+                                <span>{event.venue}</span>
+                            </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="flex-grow pb-3">
+                        {event.description && (
+                            <CardDescription className="text-sm line-clamp-3">{event.description}</CardDescription>
+                        )}
+                      </CardContent>
+                      <CardFooter className="flex items-center justify-between pt-4 mt-auto border-t">
+                        <div className="flex items-center text-xl font-bold text-primary">
+                            <DollarSign className="h-5 w-5 mr-1" />
+                            {event.price.toFixed(2)}
+                        </div>
+                        <Button asChild variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors" onClick={(e) => e.stopPropagation()}>
+                          <Link href={`/event/${event.id}`}>
+                            View Details
+                          </Link>
+                        </Button>
+                      </CardFooter>
+                    </a>
+                  </Link>
                 </Card>
               ))}
             </div>
