@@ -42,7 +42,7 @@ export default function RootLayout({
             <Sidebar collapsible="icon">
               <AppSidebarNav />
             </Sidebar>
-            <div className="flex flex-col w-full">
+            <div className="flex flex-1 flex-col"> {/* Changed w-full to flex-1 */}
               <AppHeader />
               <SidebarInset>
                 <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>

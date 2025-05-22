@@ -23,11 +23,11 @@ import { useAuth } from "@/contexts/auth-context"; // Assuming you have an auth 
 export function AppSidebarNav() {
   const pathname = usePathname();
   const { isAdmin, user } = useAuth(); // Get isAdmin state from context
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, isMobile: sidebarIsMobile } = useSidebar(); // Renamed to avoid conflict with hook name
 
 
   const handleLinkClick = () => {
-    if (useSidebar().isMobile) {
+    if (sidebarIsMobile) { // Use renamed variable
       setOpenMobile(false);
     }
   };
@@ -44,7 +44,7 @@ export function AppSidebarNav() {
       <SidebarHeader className="border-b">
         <Link href="/" className="flex items-center gap-2 py-1" onClick={handleLinkClick}>
           <AppLogo className="h-8 w-8 text-primary" />
-          <h1 className="text-xl font-bold">TicketSwift</h1>
+          <h1 className="text-xl font-bold group-data-[collapsible=icon]:hidden">TicketSwift</h1>
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -69,7 +69,7 @@ export function AppSidebarNav() {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter className="mt-auto border-t p-4">
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           © {new Date().getFullYear()} TicketSwift Inc.
         </p>
       </SidebarFooter>
