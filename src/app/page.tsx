@@ -17,15 +17,10 @@ export default function DashboardPage() {
           </p>
         </CardHeader>
         <CardContent>
-           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button asChild size="lg" className="shadow-md">
+           <div className="mt-6">
+            <Button asChild size="lg" className="shadow-md w-full md:w-auto">
               <Link href="/seat-predictor">
                 <Bot className="mr-2 h-5 w-5" /> AI Seat Predictor
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="lg" className="shadow-md">
-              <Link href="/captcha-solver">
-                <ShieldCheck className="mr-2 h-5 w-5" /> CAPTCHA Solver
               </Link>
             </Button>
           </div>

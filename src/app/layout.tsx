@@ -12,13 +12,13 @@ import {
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebarNav } from "@/components/layout/app-sidebar-nav";
 
-const inter = Inter({ // Changed from geistSans
-  variable: "--font-inter", // Changed variable name
+const inter = Inter({ 
+  variable: "--font-inter", 
   subsets: ["latin"],
 });
 
-const robotoMono = Roboto_Mono({ // Changed from geistMono
-  variable: "--font-roboto-mono", // Changed variable name
+const robotoMono = Roboto_Mono({ 
+  variable: "--font-roboto-mono", 
   subsets: ["latin"],
 });
 
@@ -35,10 +35,10 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${robotoMono.variable} antialiased font-sans`} // Updated font variables
+        className={`${inter.variable} ${robotoMono.variable} antialiased font-sans`} 
       >
         <AuthProvider>
-          <SidebarProvider defaultOpen>
+          <SidebarProvider defaultOpen={false}>
             <Sidebar collapsible="icon">
               <AppSidebarNav />
             </Sidebar>

@@ -32,12 +32,6 @@ export const NAV_ITEMS: NavItem[] = [
     tooltip: "Dashboard",
   },
   {
-    title: "Solve CAPTCHA",
-    href: "/captcha-solver",
-    icon: ScanText,
-    tooltip: "Solve CAPTCHA",
-  },
-  {
     title: "Seat Predictor",
     href: "/seat-predictor",
     icon: Lightbulb,
@@ -54,12 +48,6 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/modules",
     icon: Briefcase, // Using Briefcase as a more generic icon for modules
     tooltip: "Manage Modules",
-  },
-  {
-    title: "Loyalty Points",
-    href: "/loyalty",
-    icon: Star,
-    tooltip: "Loyalty Points",
   },
   {
     title: "Admin",
