@@ -11,25 +11,32 @@ export function HeaderLoyaltyPoints() {
   const { user } = useAuth();
   const [points, setPoints] = useState(0);
 
-  useEffect(() => {
+  const updatePointsFromStorage = () => {
     if (user) {
-      // Simulate fetching points for the logged-in user
-      // In a real app, this would be an API call based on user.uid
       const userSpecificPoints = parseInt(localStorage.getItem(`loyaltyPoints_${user.uid}`) || "0", 10);
-      if (userSpecificPoints === 0) { // Initialize if no points found
-          const randomPoints = Math.floor(Math.random() * 1200) + 50; // e.g. 50-1250 points
-          localStorage.setItem(`loyaltyPoints_${user.uid}`, randomPoints.toString());
-          setPoints(randomPoints);
-      } else {
-        setPoints(userSpecificPoints);
-      }
+      setPoints(userSpecificPoints);
     } else {
-      setPoints(0); // Reset points if user logs out
+      setPoints(0);
     }
+  };
+
+  useEffect(() => {
+    updatePointsFromStorage();
+
+    // Listen for a custom event that signals points have been updated elsewhere
+    const handlePointsUpdate = () => {
+      updatePointsFromStorage();
+    };
+    window.addEventListener('loyaltyPointsUpdated', handlePointsUpdate);
+
+    return () => {
+      window.removeEventListener('loyaltyPointsUpdated', handlePointsUpdate);
+    };
   }, [user]);
 
+
   if (!user) {
-    return null; // Don't show if not logged in
+    return null;
   }
 
   return (

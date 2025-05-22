@@ -5,9 +5,9 @@ import {
   BookOpenText,
   SlidersHorizontal,
   Ticket as TicketIcon,
-  CalendarDays, 
-  Settings as SettingsIcon, // Renamed to avoid conflict
-  Download, // Added Download icon
+  CalendarDays,
+  Settings as SettingsIcon,
+  Download as DownloadIcon, // Renamed to avoid conflict
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -33,9 +33,9 @@ export const NAV_ITEMS: NavItem[] = [
     tooltip: "Tutorial & Guides",
   },
   {
-    title: "Download App", // New Download link
+    title: "Download App",
     href: "/download",
-    icon: Download,
+    icon: DownloadIcon,
     tooltip: "Download Desktop App",
   },
   {
@@ -54,12 +54,13 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export type TicketEvent = {
-  id: string; 
+  id: string;
   name: string;
   venue: string;
-  onSaleDate: string; 
-  endDate: string;    
+  onSaleDate: string;
+  endDate: string;
   price: number;
+  pointsAwarded?: number; // Points awarded for getting a verification code for this event
   imageUrl?: string;
   description?: string;
   dataAiHint?: string;
@@ -83,6 +84,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     onSaleDate: getRelativeDate(-10), // On sale 10 days ago
     endDate: getRelativeDate(5), // Ends in 5 days
     price: 75.00,
+    pointsAwarded: 100,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Experience the titans of rock live in concert. A night to remember!",
     dataAiHint: "rock concert"
@@ -94,6 +96,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     onSaleDate: getRelativeDate(7), // On sale in 7 days (Upcoming)
     endDate: getRelativeDate(14), // Ends in 14 days
     price: 45.50,
+    pointsAwarded: 50,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Discover the best new indie bands at this year's Indie Fest.",
     dataAiHint: "music festival indie"
@@ -105,6 +108,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     onSaleDate: getRelativeDate(-30), // On sale 30 days ago
     endDate: getRelativeDate(-5), // Ended 5 days ago (Past)
     price: 60.00,
+    pointsAwarded: 75,
     imageUrl: "https://placehold.co/600x400.png",
     description: "An evening of smooth jazz.",
     dataAiHint: "jazz music"

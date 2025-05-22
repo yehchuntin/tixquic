@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle, Loader2, Settings2, Edit3 } from 'lucide-react';
+import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle, Loader2, Settings2, Edit3, Star } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, FormEvent } from 'react'; 
 import { LoadingSpinner } from '@/components/shared/loading-spinner'; 
@@ -62,7 +62,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const [flowStep, setFlowStep] = useState<'initial' | 'payment' | 'purchased'>('initial');
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
   const [showVerificationCode, setShowVerificationCode] = useState(false);
-  const [userVerificationDocId, setUserVerificationDocId] = useState<string | null>(null); // To store the doc ID for updates
+  const [userVerificationDocId, setUserVerificationDocId] = useState<string | null>(null);
   const [hasAlreadyPurchased, setHasAlreadyPurchased] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingPurchaseStatus, setLoadingPurchaseStatus] = useState(true);
@@ -95,6 +95,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
             ...data,
             onSaleDate: onSaleDateString,
             endDate: endDateString,
+            pointsAwarded: data.pointsAwarded || 0,
           } as TicketEvent;
           setEvent(fetchedEvent);
           setStatus(getEventDisplayStatus(fetchedEvent));
@@ -149,7 +150,6 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
           setVerificationCode(null);
           setHasAlreadyPurchased(false);
           setFlowStep('initial');
-          // Reset preferences if not purchased
           setTicketCount("1");
           setSessionPreference("");
           setSeatPreferenceOrder("");
@@ -179,14 +179,25 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
   useEffect(() => {
     if (flowStep === 'payment') {
-      setIsSubmitting(true); // Keep submitting true during payment simulation
+      setIsSubmitting(true);
       setTimeout(() => {
         toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
         setFlowStep('purchased'); 
-        setIsSubmitting(false); // Set submitting to false after payment simulation
+        setIsSubmitting(false);
+        // Simulate awarding points after "successful" payment
+        if (user && event && event.pointsAwarded && event.pointsAwarded > 0) {
+            const currentPoints = parseInt(localStorage.getItem(`loyaltyPoints_${user.uid}`) || "0", 10);
+            const newPoints = currentPoints + event.pointsAwarded;
+            localStorage.setItem(`loyaltyPoints_${user.uid}`, newPoints.toString());
+            toast({ title: "Points Awarded!", description: `You earned ${event.pointsAwarded} loyalty points!`});
+            // This dispatch can help if HeaderLoyaltyPoints listens to custom events, or relies on a global state.
+            // For localStorage, a refresh or navigation might be needed to see header update without further mechanism.
+            window.dispatchEvent(new CustomEvent('loyaltyPointsUpdated'));
+        }
+
       }, 2000);
     }
-  }, [flowStep, toast]);
+  }, [flowStep, toast, user, event]);
 
 
   const handleInitialTicketAction = async () => {
@@ -202,22 +213,21 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     const newCode = generateRandomAlphanumeric(16);
 
     try {
-      // Save basic verification first, preferences will be set/updated later
       const docRef = await addDoc(collection(db, 'userEventVerifications'), {
         userId: user.uid,
         eventId: event.id,
         eventName: event.name,
         verificationCode: newCode,
-        ticketCount: 1, // Default or empty
-        sessionPreference: "", // Default or empty
-        seatPreferenceOrder: "", // Default or empty
+        ticketCount: 1, 
+        sessionPreference: "", 
+        seatPreferenceOrder: "", 
         purchaseDate: serverTimestamp(),
       });
       
       setUserVerificationDocId(docRef.id);
       setVerificationCode(newCode);
-      setHasAlreadyPurchased(true); // Mark as purchased immediately
-      setFlowStep('payment'); // Proceed to simulated payment
+      setHasAlreadyPurchased(true);
+      setFlowStep('payment');
       toast({ title: "Verification Code Generated!", description: "Proceeding to simulated payment. You can set preferences after." });
     } catch (error) {
       console.error("Error saving initial verification code:", error);
@@ -227,9 +237,6 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   };
 
   const handleOpenPreferenceDialog = () => {
-    // When opening, ensure current preferences for THIS verification are loaded
-    // This is already handled by the useEffect that loads purchase status
-    // and populates ticketCount, sessionPreference, seatPreferenceOrder
     setIsPreferenceDialogOpen(true);
   };
 
@@ -314,7 +321,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const mainButtonText = () => {
     if (loadingPurchaseStatus) return "Checking Status...";
     if (flowStep === 'purchased' || hasAlreadyPurchased) return "Code Obtained";
-    if (flowStep === 'payment' || isSubmitting) return "Processing..."; // Covers both initial purchase and preference submission
+    if (flowStep === 'payment' || isSubmitting) return "Processing...";
     return "Get Tickets Now";
   };
 
@@ -387,6 +394,14 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
                 {event.description || "No detailed description available for this event."}
               </p>
             </div>
+             {event.pointsAwarded && event.pointsAwarded > 0 && (
+              <div className="mt-4 p-4 bg-accent/10 border border-accent/30 rounded-md flex items-center gap-2">
+                <Star className="h-5 w-5 text-accent fill-accent/20" />
+                <p className="text-sm text-accent-foreground">
+                  Get <strong className="font-semibold">{event.pointsAwarded} loyalty points</strong> for obtaining a verification code for this event!
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-8 md:border-l md:pl-8 md:pt-0 pt-8 border-t md:border-t-0">
@@ -550,6 +565,3 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   );
 }
 
-    
-
-    

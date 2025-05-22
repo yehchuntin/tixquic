@@ -36,7 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles, Star } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -56,6 +56,7 @@ const eventSchemaBase = z.object({
   onSaleDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid on-sale date format."),
   endDate: z.string().refine((date) => !isNaN(Date.parse(date)), "Invalid end date format."),
   price: z.coerce.number().positive("Price must be a positive number."),
+  pointsAwarded: z.coerce.number().int().nonnegative("Points awarded must be a non-negative integer.").optional(),
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
@@ -64,7 +65,7 @@ const eventSchemaBase = z.object({
 const eventSchema = eventSchemaBase.refine(
   (data) => {
     if (data.onSaleDate && data.endDate) {
-      return new Date(data.endDate) >= new Date(data.onSaleDate); // Allow same day for end date
+      return new Date(data.endDate) >= new Date(data.onSaleDate);
     }
     return true;
   },
@@ -82,9 +83,9 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
   const onSale = new Date(event.onSaleDate);
   onSale.setHours(0,0,0,0);
   const end = new Date(event.endDate);
-  end.setHours(0,0,0,0); // Compare end of day for endDate
+  end.setHours(0,0,0,0);
 
-  if (today > end) { // If today is strictly after the end date
+  if (today > end) {
     return { text: "Past", variant: "destructive" };
   }
   if (today >= onSale) {
@@ -115,6 +116,7 @@ export function EventManager() {
     resolver: zodResolver(eventSchema),
     defaultValues: {
       price: 0,
+      pointsAwarded: 0,
       imageUrl: "",
       description: "",
       dataAiHint: "",
@@ -136,7 +138,6 @@ export function EventManager() {
     const unsubscribe = onSnapshot(eventsCollectionRef, (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => {
         const data = doc.data();
-        // Ensure dates are correctly formatted string 'YYYY-MM-DD'
         const onSaleDateString = data.onSaleDate instanceof Timestamp 
             ? data.onSaleDate.toDate().toISOString().split('T')[0] 
             : data.onSaleDate;
@@ -148,8 +149,9 @@ export function EventManager() {
             ...data,
             onSaleDate: onSaleDateString,
             endDate: endDateString,
+            pointsAwarded: data.pointsAwarded || 0, // Ensure pointsAwarded has a default
         } as TicketEvent;
-      }).sort((a, b) => new Date(b.onSaleDate).getTime() - new Date(a.onSaleDate).getTime()); // Sort by most recent onSaleDate first
+      }).sort((a, b) => new Date(b.onSaleDate).getTime() - new Date(a.onSaleDate).getTime());
       setEvents(fetchedEvents);
       setIsLoadingEvents(false);
     }, (error) => {
@@ -184,6 +186,7 @@ export function EventManager() {
       onSaleDate: today,
       endDate: weekLater,
       price: 0,
+      pointsAwarded: 0,
       imageUrl: "",
       description: "",
       dataAiHint: ""
@@ -199,6 +202,7 @@ export function EventManager() {
         onSaleDate: event.onSaleDate,
         endDate: event.endDate,
         price: event.price,
+        pointsAwarded: event.pointsAwarded || 0,
         imageUrl: event.imageUrl || "",
         description: event.description || "",
         dataAiHint: event.dataAiHint || ""
@@ -226,7 +230,8 @@ export function EventManager() {
     try {
       const eventDataToSave = {
         ...data,
-        price: Number(data.price) // Ensure price is stored as a number
+        price: Number(data.price),
+        pointsAwarded: Number(data.pointsAwarded || 0)
       };
 
       if (editingEvent) {
@@ -234,7 +239,7 @@ export function EventManager() {
         await updateDoc(eventRef, eventDataToSave);
         toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
       } else {
-        const newEventId = `evt${Date.now()}`;
+        const newEventId = \`evt\${Date.now()}\`;
         const newEventRef = doc(db, "events", newEventId);
         await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
         toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
@@ -255,12 +260,10 @@ export function EventManager() {
     let deletedCount = 0;
 
     try {
-      // 1. Fetch all events
       const eventsQuery = query(collection(db, "events"));
       const eventsSnapshot = await getDocs(eventsQuery);
       const allEvents = eventsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TicketEvent));
 
-      // 2. Filter for past events
       const pastEvents = allEvents.filter(event => {
         const eventEndDate = new Date(event.endDate);
         const todayDate = new Date(today);
@@ -275,7 +278,6 @@ export function EventManager() {
 
       const batch = writeBatch(db);
 
-      // 3. For each past event, find and mark for deletion its verifications
       for (const event of pastEvents) {
         const verificationsQuery = query(collection(db, "userEventVerifications"), where("eventId", "==", event.id));
         const verificationsSnapshot = await getDocs(verificationsQuery);
@@ -290,7 +292,7 @@ export function EventManager() {
 
       if (deletedCount > 0) {
         await batch.commit();
-        toast({ title: "Cleanup Successful", description: `Successfully deleted ${deletedCount} verification codes for past events.` });
+        toast({ title: "Cleanup Successful", description: \`Successfully deleted \${deletedCount} verification codes for past events.\` });
       } else {
         toast({ title: "No Codes to Clean", description: "No verification codes found for past events." });
       }
@@ -371,6 +373,16 @@ export function EventManager() {
               </div>
               {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
             </div>
+            
+            <div>
+              <Label htmlFor="pointsAwarded">Points Awarded</Label>
+               <div className="relative">
+                <Star className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input id="pointsAwarded" type="number" {...register("pointsAwarded")} className="pl-7" disabled={isSubmitting} />
+              </div>
+              {errors.pointsAwarded && <p className="text-sm text-destructive">{errors.pointsAwarded.message}</p>}
+            </div>
+
 
             <div className="md:col-span-2">
               <Label htmlFor="imageUrl">Image URL</Label>
@@ -378,7 +390,7 @@ export function EventManager() {
               {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
               {watchedImageUrl && (
                 <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
-                  <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} />
+                  <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} data-ai-hint="image preview" />
                 </div>
               )}
             </div>
@@ -418,6 +430,7 @@ export function EventManager() {
               <TableHead>End Date</TableHead>
               <TableHead>Venue</TableHead>
               <TableHead>Price</TableHead>
+              <TableHead>Points</TableHead>
               <TableHead>Current Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -443,6 +456,7 @@ export function EventManager() {
                 <TableCell>{new Date(event.endDate).toLocaleDateString()}</TableCell>
                 <TableCell>{event.venue}</TableCell>
                 <TableCell>${event.price.toFixed(2)}</TableCell>
+                <TableCell>{event.pointsAwarded || 0}</TableCell>
                 <TableCell>
                   <Badge variant={computedStatus.variant} className={
                       computedStatus.text === "On Sale" ? "bg-green-100 text-green-700" :
@@ -522,4 +536,3 @@ export function EventManager() {
     </div>
   );
 }
-
