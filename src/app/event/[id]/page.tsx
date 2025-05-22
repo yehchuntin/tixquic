@@ -1,4 +1,6 @@
 
+"use client"; // Make this a Client Component
+
 import type { Metadata, ResolvingMetadata } from 'next';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -9,52 +11,33 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react'; // Import useState and useEffect
+import { LoadingSpinner } from '@/components/shared/loading-spinner'; // For loading state
 
 interface EventDetailPageProps {
   params: { id: string };
 }
 
-async function getEvent(id: string): Promise<TicketEvent | null> {
-  try {
-    const eventDocRef = doc(db, 'events', id);
-    const eventSnap = await getDoc(eventDocRef);
+// Metadata generation remains a server-side capability
+// export async function generateMetadata(
+//   { params }: EventDetailPageProps,
+//   parent: ResolvingMetadata
+// ): Promise<Metadata> {
+//   const event = await getEvent(params.id); // This function needs to be defined if used here
+//   const previousTitle = (await parent).title?.absolute || "TicketSwift";
 
-    if (eventSnap.exists()) {
-      // Ensure dates are correctly formatted if they are Timestamps from Firestore
-      const data = eventSnap.data();
-      return { 
-        id: eventSnap.id, 
-        ...data,
-        // Convert Firestore Timestamps to string if they are, otherwise assume string
-        onSaleDate: data.onSaleDate?.toDate ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
-        endDate: data.endDate?.toDate ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
-      } as TicketEvent;
-    }
-    return null;
-  } catch (error) {
-    console.error("Error fetching event:", error);
-    return null;
-  }
-}
+//   if (!event) {
+//     return {
+//       title: `Event Not Found | ${previousTitle}`,
+//     };
+//   }
 
-export async function generateMetadata(
-  { params }: EventDetailPageProps,
-  parent: ResolvingMetadata
-): Promise<Metadata> {
-  const event = await getEvent(params.id);
-  const previousTitle = (await parent).title?.absolute || "TicketSwift";
-
-  if (!event) {
-    return {
-      title: `Event Not Found | ${previousTitle}`,
-    };
-  }
-
-  return {
-    title: `${event.name} | ${previousTitle}`,
-    description: event.description || `Details for ${event.name}`,
-  };
-}
+//   return {
+//     title: `${event.name} | ${previousTitle}`,
+//     description: event.description || `Details for ${event.name}`,
+//   };
+// }
+// For simplicity in a Client Component, we might set title dynamically via useEffect or skip generateMetadata if not critical
 
 const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } => {
   const today = new Date();
@@ -64,7 +47,7 @@ const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'
   const end = new Date(event.endDate);
   end.setHours(0,0,0,0);
 
-  if (today > end) { // Changed to > to correctly identify past events
+  if (today > end) {
     return { text: "Past Event", variant: "destructive", isActionable: false };
   }
   if (today >= onSale) {
@@ -73,10 +56,65 @@ const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'
   return { text: "Upcoming", variant: "secondary", isActionable: false };
 };
 
-export default async function EventDetailPage({ params }: EventDetailPageProps) {
-  const event = await getEvent(params.id);
+export default function EventDetailPage({ params }: EventDetailPageProps) {
+  const [event, setEvent] = useState<TicketEvent | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<{ text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } | null>(null);
+  const [flowStep, setFlowStep] = useState<'initial' | 'verification'>('initial');
 
-  if (!event) {
+  useEffect(() => {
+    const fetchEvent = async () => {
+      setLoading(true);
+      try {
+        const eventDocRef = doc(db, 'events', params.id);
+        const eventSnap = await getDoc(eventDocRef);
+
+        if (eventSnap.exists()) {
+          const data = eventSnap.data();
+          const fetchedEvent = { 
+            id: eventSnap.id, 
+            ...data,
+            onSaleDate: data.onSaleDate?.toDate ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
+            endDate: data.endDate?.toDate ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+          } as TicketEvent;
+          setEvent(fetchedEvent);
+          setStatus(getEventDisplayStatus(fetchedEvent));
+        } else {
+          setEvent(null);
+          setStatus(null);
+        }
+      } catch (error) {
+        console.error("Error fetching event:", error);
+        setEvent(null);
+        setStatus(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (params.id) {
+      fetchEvent();
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    if (event && event.name) {
+      document.title = `${event.name} | TicketSwift`;
+    } else if (!event && !loading) {
+      document.title = `Event Not Found | TicketSwift`;
+    }
+  }, [event, loading]);
+
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-10 text-center flex justify-center items-center min-h-[calc(100vh-10rem)]">
+        <LoadingSpinner size={48} />
+      </div>
+    );
+  }
+
+  if (!event || !status) {
     return (
       <div className="container mx-auto py-10 text-center">
         <Card className="max-w-lg mx-auto shadow-lg border-destructive">
@@ -100,7 +138,18 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     );
   }
 
-  const status = getEventDisplayStatus(event);
+  const handleTicketAction = () => {
+    if (flowStep === 'initial' && status.isActionable) {
+      setFlowStep('verification');
+      // In a real app, you might trigger an API call or some preparation here.
+      // For now, we just change the button text.
+    } else if (flowStep === 'verification' && status.isActionable) {
+      // This is where you would initiate the actual verification number process
+      // For example, calling a Genkit flow.
+      alert("Initiating verification number process... (placeholder)");
+      // You might want to disable the button here or show a loading state.
+    }
+  };
 
   return (
     <div className="container mx-auto py-8 space-y-8">
@@ -197,12 +246,18 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                 </div>
             </div>
             
-            <Button size="lg" className="w-full text-lg py-3" disabled={!status.isActionable}>
+            <Button 
+              size="lg" 
+              className="w-full text-lg py-3" 
+              disabled={!status.isActionable}
+              onClick={handleTicketAction}
+            >
               <Ticket className="mr-2 h-5 w-5" />
-              {status.isActionable ? "Get Tickets Now" : (status.text === "Upcoming" ? "Tickets Not Yet Available" : "Tickets Unavailable")}
+              {status.isActionable 
+                ? (flowStep === 'initial' ? "Get Tickets Now" : "Get Verification Number") 
+                : (status.text === "Upcoming" ? "Tickets Not Yet Available" : "Tickets Unavailable")}
             </Button>
             
-            {/* Placeholder for AI Seat Predictor - to be added in a future step */}
             <Card className="mt-8 bg-secondary/20 border-primary/30">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center text-primary/90">
@@ -213,13 +268,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   Want the best chance for this event? Our AI can help predict optimal sections. (Feature coming soon for specific events)
                 </CardDescription>
               </CardHeader>
-              {/* 
-              <CardContent>
-                <Button variant="outline" className="w-full" disabled>
-                  Analyze Seating for this Event
-                </Button>
-              </CardContent>
-              */}
             </Card>
           </div>
         </CardContent>
@@ -228,4 +276,3 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
   );
 }
 
-    

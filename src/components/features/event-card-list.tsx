@@ -65,7 +65,7 @@ export function EventList() {
             eventEndDate.setHours(0,0,0,0);
             return today <= eventEndDate; 
         })
-        .sort((a, b) => new Date(a.onSaleDate).getTime() - new Date(b.onSaleDate).getTime()); // Sort by onSaleDate
+        .sort((a, b) => new Date(a.onSaleDate).getTime() - new Date(b.onSaleDate).getTime());
       
       setDisplayEvents(processedEvents);
       setIsLoading(false);
@@ -109,7 +109,7 @@ export function EventList() {
         {displayEvents.length === 0 ? (
           <p className="text-muted-foreground text-center py-10 text-lg">No upcoming or on-sale events at the moment. Check back soon!</p>
         ) : (
-          <ScrollArea className="h-[500px] lg:h-auto lg:max-h-[calc(100vh-20rem)] -mr-4 pr-4">
+          <ScrollArea className="h-auto max-h-[70vh] lg:max-h-[calc(100vh-22rem)] -mr-4 pr-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayEvents.map((event) => (
                 <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group hover:border-primary">
@@ -178,5 +178,4 @@ export function EventList() {
     </Card>
   );
 }
-
     
