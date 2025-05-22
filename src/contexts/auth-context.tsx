@@ -17,6 +17,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const ADMIN_EMAILS = ["2017yehchunting@gmail.com"]; // Add specific admin emails here
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -26,7 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (currentUser) => {
       setUser(currentUser);
       if (currentUser && currentUser.email) {
-        setIsAdmin(currentUser.email.includes("admin"));
+        // Check if the email includes "admin" OR is in the ADMIN_EMAILS list
+        const isAdminByKeyword = currentUser.email.toLowerCase().includes("admin");
+        const isAdminBySpecificList = ADMIN_EMAILS.includes(currentUser.email.toLowerCase());
+        setIsAdmin(isAdminByKeyword || isAdminBySpecificList);
       } else {
         setIsAdmin(false);
       }
