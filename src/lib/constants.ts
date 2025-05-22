@@ -4,15 +4,12 @@ import {
   KeyRound,
   Lightbulb,
   BarChart3,
-  // ShieldCheck, // Not used directly in NAV_ITEMS, consider removing if not used elsewhere
-  // Ticket, // Not used directly in NAV_ITEMS
-  // Star, // Not used directly in NAV_ITEMS
-  Settings,
+  Settings as SettingsIcon, // Renamed to avoid conflict
   LayoutDashboard,
-  // ScanText, // Not used directly in NAV_ITEMS
   Users,
   Briefcase,
-  // CreditCard // Not used directly in NAV_ITEMS
+  BookOpenText, // New icon for How to Use
+  SlidersHorizontal // New icon for Settings
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -30,6 +27,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/",
     icon: LayoutDashboard,
     tooltip: "Dashboard",
+  },
+  {
+    title: "How to Use",
+    href: "/how-to-use",
+    icon: BookOpenText,
+    tooltip: "Tutorial & Guides",
   },
   {
     title: "Seat Predictor",
@@ -50,9 +53,15 @@ export const NAV_ITEMS: NavItem[] = [
     tooltip: "Manage Modules",
   },
   {
+    title: "Settings",
+    href: "/settings",
+    icon: SlidersHorizontal,
+    tooltip: "User Settings",
+  },
+  {
     title: "Admin",
-    href: "/admin", // This now points to the admin hub page
-    icon: Settings,
+    href: "/admin", 
+    icon: SettingsIcon,
     adminOnly: true,
     tooltip: "Admin Panel",
   },
