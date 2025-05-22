@@ -41,8 +41,8 @@ export function EventList() {
             id: doc.id, 
             ...data,
             // Ensure dates are strings for client-side processing
-            onSaleDate: data.onSaleDate?.toDate ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
-            endDate: data.endDate?.toDate ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+            onSaleDate: data.onSaleDate instanceof Timestamp ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
+            endDate: data.endDate instanceof Timestamp ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
         } as TicketEvent;
       });
       
@@ -118,16 +118,17 @@ export function EventList() {
                         <Image
                         src={event.imageUrl}
                         alt={event.name}
-                        layout="fill"
-                        objectFit="cover"
+                        fill
+                        style={{ objectFit: "cover" }}
                         className="transition-transform duration-500 group-hover:scale-105"
                         data-ai-hint={event.dataAiHint || "event image"}
+                        priority={displayEvents.indexOf(event) < 3} // Add priority to first few images
                         />
-                         <div className="absolute top-2 right-2">
+                         <div className="absolute top-2 right-2 z-10">
                              <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
                                className={
-                                event.effectiveStatus === "On Sale" ? "bg-green-500 text-white border-green-600 shadow-md" :
-                                "bg-blue-500 text-white border-blue-600 shadow-md"
+                                event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
+                                "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
                                }
                             >
                                 {event.effectiveStatus}
@@ -135,8 +136,18 @@ export function EventList() {
                          </div>
                     </div>
                   ) : (
-                    <div className="h-52 w-full bg-muted flex items-center justify-center">
+                    <div className="relative h-52 w-full bg-muted flex items-center justify-center">
                         <TicketIcon className="w-16 h-16 text-muted-foreground/50" />
+                        <div className="absolute top-2 right-2 z-10">
+                             <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
+                               className={
+                                event.effectiveStatus === "On Sale" ? "bg-green-500 hover:bg-green-600 text-primary-foreground border-green-600 shadow-md" :
+                                "bg-blue-500 hover:bg-blue-600 text-primary-foreground border-blue-600 shadow-md"
+                               }
+                            >
+                                {event.effectiveStatus}
+                            </Badge>
+                         </div>
                     </div>
                   )}
                   <CardHeader className="pb-3 pt-4">
@@ -144,7 +155,7 @@ export function EventList() {
                      <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
                         <div className="flex items-center">
                             <CalendarIcon className="mr-1.5 h-4 w-4" />
-                            <span>{new Date(event.onSaleDate).toLocaleDateString()}</span>
+                            <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                         </div>
                         <span className="text-muted-foreground/50">|</span>
                         <div className="flex items-center">
