@@ -1,7 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Download, MonitorPlay, Windows, Apple } from "lucide-react";
+import { Download, MonitorPlay, AppWindow, Apple } from "lucide-react"; // Changed Windows to AppWindow
 import Link from "next/link";
 
 export default function DownloadPage() {
@@ -45,7 +45,7 @@ export default function DownloadPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <Button size="lg" className="w-full sm:w-auto" disabled>
-              <Windows className="mr-2 h-5 w-5" /> Download for Windows
+              <AppWindow className="mr-2 h-5 w-5" /> Download for Windows
             </Button>
             <Button size="lg" className="w-full sm:w-auto" disabled>
               <Apple className="mr-2 h-5 w-5" /> Download for macOS
