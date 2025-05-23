@@ -4,15 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ShieldCheck, Lightbulb } from "lucide-react"; 
-import { AppLogo } from "@/components/icons/app-logo"; // Import AppLogo
+import { AppLogo } from "@/components/icons/app-logo";
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 flex flex-col flex-1"> {/* MODIFIED: Added flex flex-col flex-1 */}
       <Card className="bg-gradient-to-r from-primary/10 to-accent/10 p-6 md:p-8 rounded-xl shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2">
-            <AppLogo className="h-10 w-10 text-primary" /> {/* Changed icon */}
+            <AppLogo className="h-10 w-10 text-primary" />
             <CardTitle className="text-3xl md:text-4xl font-bold">Welcome to TicketSwift!</CardTitle>
           </div>
           <p className="text-muted-foreground mt-2 text-lg">
@@ -35,10 +35,9 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1"> 
-        <div>
-          <EventList /> 
-        </div>
+      {/* MODIFIED: Simplified wrapper and made it flexible */}
+      <div className="flex-1 min-h-0"> 
+        <EventList /> 
       </div>
     </div>
   );

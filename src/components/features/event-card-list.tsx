@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase"; 
-import { collection, query, where, onSnapshot, Timestamp } from "firebase/firestore";
+import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore"; // Added orderBy
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,7 +30,13 @@ export function EventList() {
     const eventsCollectionRef = collection(db, "events");
     const todayStr = new Date().toISOString().split('T')[0]; 
 
-    const q = query(eventsCollectionRef, where("endDate", ">=", todayStr));
+    // Query active events and order by onSaleDate
+    const q = query(
+      eventsCollectionRef, 
+      where("endDate", ">=", todayStr),
+      orderBy("endDate", "asc"), // Secondary sort: earlier end dates first
+      orderBy("onSaleDate", "asc") // Primary sort: earlier on-sale dates first
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const today = new Date();
@@ -61,12 +67,12 @@ export function EventList() {
           }
           return { ...event, effectiveStatus };
         })
-        .filter(event => {
+        .filter(event => { // This client-side filter is fine as Firestore query already filters past events
             const eventEndDate = new Date(event.endDate);
             eventEndDate.setHours(23,59,59,999); 
             return today <= eventEndDate; 
-        })
-        .sort((a, b) => new Date(a.onSaleDate).getTime() - new Date(b.onSaleDate).getTime());
+        });
+        // Sorting is now handled by Firestore's orderBy
       
       setDisplayEvents(processedEvents);
       setIsLoading(false);
@@ -82,14 +88,14 @@ export function EventList() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-lg w-full border">
+      <Card className="shadow-lg w-full border flex flex-col"> {/* Ensure flex for loading state too */}
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <AppLogo className="h-7 w-7 text-primary" />
             <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="h-[300px] flex flex-col items-center justify-center">
+        <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center"> {/* Ensure it can take space */}
           <LoadingSpinner size={36} />
           <p className="mt-3 text-muted-foreground">Loading upcoming events...</p>
         </CardContent>
@@ -98,7 +104,7 @@ export function EventList() {
   }
 
   return (
-    <Card className="shadow-lg w-full border">
+    <Card className="shadow-lg w-full border flex flex-col h-full"> {/* MODIFIED: Added flex flex-col h-full */}
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <AppLogo className="h-7 w-7 text-primary" />
@@ -106,13 +112,15 @@ export function EventList() {
         </div>
         {displayEvents.length > 0 && <Badge variant="secondary" className="text-sm px-3 py-1">{displayEvents.length} Events</Badge>}
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 min-h-0"> {/* MODIFIED: flex-1 and min-h-0 */}
         {displayEvents.length === 0 ? (
-          <p className="text-muted-foreground text-center py-10 text-lg">No upcoming or on-sale events at the moment. Check back soon!</p>
+          <div className="h-full flex items-center justify-center">
+            <p className="text-muted-foreground text-center py-10 text-lg">No upcoming or on-sale events at the moment. Check back soon!</p>
+          </div>
         ) : (
-          <ScrollArea className="max-h-[70vh] lg:max-h-[calc(100vh-22rem)]">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4"> {/* Added pr-4 here */}
-              {displayEvents.map((event) => (
+          <ScrollArea className="h-full"> {/* MODIFIED: h-full */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4">
+              {displayEvents.map((event, index) => ( // Added index for priority prop
                 <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group cursor-pointer">
                   <Link href={`/event/${event.id}`} passHref legacyBehavior>
                     <a className="flex flex-col h-full">
@@ -125,7 +133,7 @@ export function EventList() {
                             style={{ objectFit: "cover" }}
                             className="transition-transform duration-500 group-hover:scale-105"
                             data-ai-hint={event.dataAiHint || "event image"}
-                            priority={displayEvents.indexOf(event) < 3} 
+                            priority={index < 3} // Prioritize loading for first few images
                             />
                              <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
