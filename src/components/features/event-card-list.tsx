@@ -6,7 +6,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Ticket as TicketIcon, CalendarIcon, DollarSign, MapPin } from "lucide-react";
+import { Ticket as TicketIconPlaceholder } from "lucide-react"; // Renamed for clarity
+import { AppLogo } from "@/components/icons/app-logo"; // Import AppLogo
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -35,7 +36,7 @@ export function EventList() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const fetchedEvents = snapshot.docs.map(doc => {
+      const fetchedEvents: TicketEvent[] = snapshot.docs.map(doc => {
         const data = doc.data();
         return { 
             id: doc.id, 
@@ -62,7 +63,7 @@ export function EventList() {
         })
         .filter(event => {
             const eventEndDate = new Date(event.endDate);
-            eventEndDate.setHours(23,59,59,999); // Consider event active for the whole end date
+            eventEndDate.setHours(23,59,59,999); 
             return today <= eventEndDate; 
         })
         .sort((a, b) => new Date(a.onSaleDate).getTime() - new Date(b.onSaleDate).getTime());
@@ -84,8 +85,8 @@ export function EventList() {
       <Card className="shadow-lg w-full border">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <TicketIcon className="h-6 w-6 text-primary" />
-            <CardTitle className="text-2xl">Featured Events</CardTitle>
+            <AppLogo className="h-7 w-7 text-primary" /> {/* Changed icon */}
+            <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="h-[300px] flex flex-col items-center justify-center">
@@ -100,7 +101,7 @@ export function EventList() {
     <Card className="shadow-lg w-full border">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
-          <TicketIcon className="h-7 w-7 text-primary" />
+          <AppLogo className="h-7 w-7 text-primary" /> {/* Changed icon */}
           <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
         </div>
         {displayEvents.length > 0 && <Badge variant="secondary" className="text-sm px-3 py-1">{displayEvents.length} Events</Badge>}
@@ -139,7 +140,7 @@ export function EventList() {
                         </div>
                       ) : (
                         <div className="relative h-52 w-full bg-muted flex items-center justify-center">
-                            <TicketIcon className="w-16 h-16 text-muted-foreground/50" />
+                            <TicketIconPlaceholder className="w-16 h-16 text-muted-foreground/50" />
                             <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
                                    className={
@@ -155,15 +156,11 @@ export function EventList() {
                       <CardHeader className="pb-3 pt-4">
                         <CardTitle className="text-xl leading-tight font-semibold group-hover:text-primary transition-colors">{event.name}</CardTitle>
                          <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
-                            <div className="flex items-center">
-                                <CalendarIcon className="mr-1.5 h-4 w-4" />
-                                <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                            </div>
+                            {/* Removed CalendarIcon */}
+                            <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             <span className="text-muted-foreground/50">|</span>
-                            <div className="flex items-center">
-                                <MapPin className="mr-1.5 h-4 w-4" />
-                                <span>{event.venue}</span>
-                            </div>
+                            {/* Removed MapPin */}
+                            <span>{event.venue}</span>
                         </div>
                       </CardHeader>
                       <CardContent className="flex-grow pb-3">
@@ -173,8 +170,8 @@ export function EventList() {
                       </CardContent>
                       <CardFooter className="flex items-center justify-between pt-4 mt-auto border-t">
                         <div className="flex items-center text-xl font-bold text-primary">
-                            <DollarSign className="h-5 w-5 mr-1" />
-                            {event.price.toFixed(2)}
+                            {/* Removed DollarSign icon */}
+                            <span>{event.price.toFixed(2)}</span>
                         </div>
                         <Button variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             View Details
