@@ -1,7 +1,7 @@
 
 "use client";
 
-import { type TicketEvent } from "@/lib/constants"; 
+import type { TicketEvent } from "@/lib/constants";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,8 +10,8 @@ import { AppLogo } from "@/components/icons/app-logo";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { db } from "@/lib/firebase"; 
-import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { collection, query, where, Timestamp, orderBy, getDocs } from "firebase/firestore"; // Changed from onSnapshot to getDocs
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,70 +26,85 @@ export function EventList() {
 
   useEffect(() => {
     setIsLoading(true);
+    console.log("EventList: useEffect triggered. Attempting to fetch events with getDocs.");
+
     const eventsCollectionRef = collection(db, "events");
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today to the start of the day
+    today.setHours(0, 0, 0, 0);
+    console.log("EventList: Current date for query (start of day):", today.toISOString());
 
-    // Query active events: endDate is today or in the future.
-    // Order by onSaleDate (earliest first), then by endDate (earliest first) for secondary sort.
     const q = query(
-      eventsCollectionRef, 
-      where("endDate", ">=", Timestamp.fromDate(today)), // Use Firestore Timestamp for date comparisons
-      orderBy("onSaleDate", "asc"), 
-      orderBy("endDate", "asc") 
+      eventsCollectionRef,
+      where("endDate", ">=", Timestamp.fromDate(today)),
+      orderBy("onSaleDate", "asc"),
+      orderBy("endDate", "asc")
     );
+    console.log("EventList: Firestore query object created.");
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const todayDateOnly = new Date(); // For comparing dates without time component
-      todayDateOnly.setHours(0, 0, 0, 0);
+    const fetchEventsOnce = async () => {
+      try {
+        console.log("EventList: Executing getDocs(q)...");
+        const snapshot = await getDocs(q);
+        console.log("EventList: getDocs snapshot received. Is empty:", snapshot.empty, "Size:", snapshot.docs.length);
 
-      const fetchedEvents: TicketEvent[] = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const onSaleDateString = data.onSaleDate instanceof Timestamp 
-            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
+        const todayDateOnly = new Date();
+        todayDateOnly.setHours(0, 0, 0, 0);
+
+        const fetchedEvents: TicketEvent[] = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const onSaleDateString = data.onSaleDate instanceof Timestamp
+            ? data.onSaleDate.toDate().toISOString().split('T')[0]
             : data.onSaleDate;
-        const endDateString = data.endDate instanceof Timestamp 
-            ? data.endDate.toDate().toISOString().split('T')[0] 
+          const endDateString = data.endDate instanceof Timestamp
+            ? data.endDate.toDate().toISOString().split('T')[0]
             : data.endDate;
-        return { 
-            id: doc.id, 
+          console.log(`EventList: Processing doc ${doc.id}, Name: ${data.name}, OnSale: ${onSaleDateString}, End: ${endDateString}`);
+          return {
+            id: doc.id,
             ...data,
             onSaleDate: onSaleDateString,
             endDate: endDateString,
             pointsAwarded: data.pointsAwarded || 0,
-        } as TicketEvent;
-      });
-      
-      const processedEvents: DisplayEvent[] = fetchedEvents
-        .map(event => {
-          const onSale = new Date(event.onSaleDate);
-          onSale.setHours(0,0,0,0);
-          
-          let effectiveStatus: "Upcoming" | "On Sale";
-
-          if (todayDateOnly >= onSale) {
-            effectiveStatus = "On Sale";
-          } else {
-            effectiveStatus = "Upcoming";
-          }
-          return { ...event, effectiveStatus };
-        })
-        .filter(event => { 
-            const eventEndDate = new Date(event.endDate);
-            eventEndDate.setHours(23,59,59,999); 
-            return todayDateOnly <= eventEndDate; 
+          } as TicketEvent;
         });
-      
-      setDisplayEvents(processedEvents);
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Error fetching events for homepage: ", error);
-      toast({ title: "Error Loading Events", description: "Could not load events from the database. Please try again later.", variant: "destructive" });
-      setDisplayEvents([]); // Clear events on error to avoid contradictory UI
-      setIsLoading(false);
-    });
+        console.log("EventList: Raw fetched events count:", fetchedEvents.length);
 
-    return () => unsubscribe(); 
+        const processedEvents: DisplayEvent[] = fetchedEvents
+          .map(event => {
+            const onSale = new Date(event.onSaleDate);
+            onSale.setHours(0, 0, 0, 0);
+
+            let effectiveStatus: "Upcoming" | "On Sale";
+
+            if (todayDateOnly >= onSale) {
+              effectiveStatus = "On Sale";
+            } else {
+              effectiveStatus = "Upcoming";
+            }
+            return { ...event, effectiveStatus };
+          })
+          .filter(event => {
+            const eventEndDate = new Date(event.endDate);
+            eventEndDate.setHours(23, 59, 59, 999);
+            return todayDateOnly <= eventEndDate;
+          });
+        console.log("EventList: Processed (filtered) events count:", processedEvents.length);
+
+        setDisplayEvents(processedEvents);
+
+      } catch (error) {
+        console.error("EventList: Error fetching events with getDocs:", error);
+        toast({ title: "Error Loading Events", description: "Could not load events from the database. Please try again later.", variant: "destructive" });
+        setDisplayEvents([]);
+      } finally {
+        setIsLoading(false);
+        console.log("EventList: fetchEventsOnce finished, isLoading set to false.");
+      }
+    };
+
+    fetchEventsOnce();
+
+    // No unsubscribe needed for getDocs
   }, [toast]);
 
 
@@ -126,7 +141,7 @@ export function EventList() {
           </div>
         ) : (
           <ScrollArea className="h-full">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4"> {/* Added pr-4 for scrollbar */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4">
               {displayEvents.map((event, index) => (
                 <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group cursor-pointer">
                   <Link href={`/event/${event.id}`} passHref legacyBehavior>
@@ -140,7 +155,7 @@ export function EventList() {
                             style={{ objectFit: "cover" }}
                             className="transition-transform duration-500 group-hover:scale-105"
                             data-ai-hint={event.dataAiHint || "event image"}
-                            priority={index < 3} 
+                            priority={index < 3}
                             />
                              <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
@@ -203,6 +218,3 @@ export function EventList() {
     </Card>
   );
 }
-    
-
-    

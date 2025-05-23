@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
+    // Ensure this origin exactly matches the one in your browser's warning
     allowedDevOrigins: ["https://9004-firebase-studio-1747914073735.cluster-ancjwrkgr5dvux4qug5rbzyc2y.cloudworkstations.dev"],
   },
 };
