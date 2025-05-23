@@ -20,9 +20,11 @@ import { useEffect, useState, FormEvent } from 'react';
 import { LoadingSpinner } from '@/components/shared/loading-spinner'; 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/contexts/auth-context';
+import { useParams } from 'next/navigation'; // Import useParams
 
 interface EventDetailPageProps {
-  params: { id: string };
+  // params prop is still passed by Next.js, but we'll use useParams for the ID.
+  params: { id: string }; 
 }
 
 const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } => {
@@ -51,13 +53,16 @@ const generateRandomAlphanumeric = (length: number): string => {
   return result;
 };
 
-export default function EventDetailPage({ params }: EventDetailPageProps) {
+export default function EventDetailPage({ params: routePassedParams }: EventDetailPageProps) { // Renamed params to avoid conflict with hook result
+  const pathParams = useParams();
+  const eventId = pathParams.id as string; // Get ID from useParams hook
+
   const [event, setEvent] = useState<TicketEvent | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [status, setStatus] = useState<{ text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } | null>(null);
   
   const { toast } = useToast();
-  const { user, loading: authLoading, updateUserLoyaltyPoints } = useAuth(); // Get updateUserLoyaltyPoints
+  const { user, loading: authLoading, updateUserLoyaltyPoints } = useAuth();
 
   const [flowStep, setFlowStep] = useState<'initial' | 'payment' | 'purchased'>('initial');
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
@@ -78,7 +83,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
       setLoadingEvent(true);
       setLoadingPurchaseStatus(true);
       try {
-        const eventDocRef = doc(db, 'events', params.id);
+        const eventDocRef = doc(db, 'events', eventId); // Use eventId from useParams
         const eventSnap = await getDoc(eventDocRef);
 
         if (eventSnap.exists()) {
@@ -113,10 +118,10 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
       }
     };
 
-    if (params.id) {
+    if (eventId) { // Use eventId from useParams
       fetchEvent();
     }
-  }, [params.id, toast]);
+  }, [eventId, toast]); // Depend on eventId from useParams
 
   useEffect(() => {
     if (!event || !user || authLoading) {
@@ -130,7 +135,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
         const verificationsRef = collection(db, 'userEventVerifications');
         const q = query(verificationsRef, 
           where('userId', '==', user.uid), 
-          where('eventId', '==', event.id),
+          where('eventId', '==', event.id), // event.id is correct here, as event is fetched based on eventId
           limit(1)
         );
         const querySnapshot = await getDocs(q);
@@ -173,23 +178,23 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     if (event && event.name) {
       document.title = `${event.name} | TicketSwift`;
     } else if (!event && !loadingEvent) {
-      document.title = 'Event Not Found | TicketSwift';
+      document.title = `Event Not Found | TicketSwift`;
     }
   }, [event, loadingEvent]);
 
   useEffect(() => {
     if (flowStep === 'payment') {
-      setIsSubmitting(true); // Keep submitting true during payment simulation
+      setIsSubmitting(true); 
       const handlePayment = async () => {
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate payment delay
+        await new Promise(resolve => setTimeout(resolve, 2000)); 
         toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
         
         if (user && event && event.pointsAwarded && event.pointsAwarded > 0) {
           try {
-            await updateUserLoyaltyPoints(event.pointsAwarded); // Use context function to update Firestore
+            await updateUserLoyaltyPoints(event.pointsAwarded); 
             toast({ title: "Points Awarded!", description: `You earned ${event.pointsAwarded} loyalty points!`});
           } catch (error) {
-             // Error is handled within updateUserLoyaltyPoints, but good to be aware
+             // Error is handled within updateUserLoyaltyPoints
           }
         }
         setFlowStep('purchased'); 
@@ -213,10 +218,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     const newCode = generateRandomAlphanumeric(16);
 
     try {
-      // Save with default preferences first
       const docRef = await addDoc(collection(db, 'userEventVerifications'), {
         userId: user.uid,
-        eventId: event.id,
+        eventId: event.id, // event.id is correct here
         eventName: event.name,
         verificationCode: newCode,
         ticketCount: 1, 
@@ -228,17 +232,16 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
       setUserVerificationDocId(docRef.id);
       setVerificationCode(newCode);
       setHasAlreadyPurchased(true);
-      // Set default preferences in state for immediate dialog use if opened
       setTicketCount("1");
       setSessionPreference("");
       setSeatPreferenceOrder("");
       
-      setFlowStep('payment'); // This will trigger the useEffect for payment simulation
+      setFlowStep('payment'); 
       toast({ title: "Verification Code Generated!", description: "Proceeding to simulated payment. You can set preferences after." });
     } catch (error) {
       console.error("Error saving initial verification code:", error);
       toast({ title: "Error", description: "Could not generate verification code. Please try again.", variant: "destructive" });
-      setIsSubmitting(false); // Reset submission state on error before payment simulation
+      setIsSubmitting(false); 
     }
   };
 
@@ -308,7 +311,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
              <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
             <CardTitle className="text-2xl">Event Not Found</CardTitle>
             <CardDescription>
-              The event you are looking for (ID: {params.id}) does not exist or may have been removed.
+              The event you are looking for (ID: {eventId}) does not exist or may have been removed.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -327,8 +330,8 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const mainButtonText = () => {
     if (loadingPurchaseStatus) return "Checking Status...";
     if (flowStep === 'purchased' || hasAlreadyPurchased) return "Code Obtained";
-    if (flowStep === 'payment' || isSubmitting) return "Processing..."; // isSubmitting covers payment and preference saving
-    return "Get Tickets Now";
+    if (flowStep === 'payment' || isSubmitting) return "Processing...";
+    return "Get Verfication code";
   };
 
   const isButtonDisabled = () => {
