@@ -6,8 +6,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Ticket as TicketIconPlaceholder } from "lucide-react"; // Renamed for clarity
-import { AppLogo } from "@/components/icons/app-logo"; // Import AppLogo
+import { Ticket as TicketIconPlaceholder } from "lucide-react";
+import { AppLogo } from "@/components/icons/app-logo";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -85,7 +85,7 @@ export function EventList() {
       <Card className="shadow-lg w-full border">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <AppLogo className="h-7 w-7 text-primary" /> {/* Changed icon */}
+            <AppLogo className="h-7 w-7 text-primary" />
             <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
           </div>
         </CardHeader>
@@ -101,7 +101,7 @@ export function EventList() {
     <Card className="shadow-lg w-full border">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
-          <AppLogo className="h-7 w-7 text-primary" /> {/* Changed icon */}
+          <AppLogo className="h-7 w-7 text-primary" />
           <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
         </div>
         {displayEvents.length > 0 && <Badge variant="secondary" className="text-sm px-3 py-1">{displayEvents.length} Events</Badge>}
@@ -110,8 +110,8 @@ export function EventList() {
         {displayEvents.length === 0 ? (
           <p className="text-muted-foreground text-center py-10 text-lg">No upcoming or on-sale events at the moment. Check back soon!</p>
         ) : (
-          <ScrollArea className="h-auto max-h-[70vh] lg:max-h-[calc(100vh-22rem)] -mr-4 pr-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ScrollArea className="max-h-[70vh] lg:max-h-[calc(100vh-22rem)]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4"> {/* Added pr-4 here */}
               {displayEvents.map((event) => (
                 <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group cursor-pointer">
                   <Link href={`/event/${event.id}`} passHref legacyBehavior>
@@ -156,10 +156,8 @@ export function EventList() {
                       <CardHeader className="pb-3 pt-4">
                         <CardTitle className="text-xl leading-tight font-semibold group-hover:text-primary transition-colors">{event.name}</CardTitle>
                          <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
-                            {/* Removed CalendarIcon */}
                             <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                             <span className="text-muted-foreground/50">|</span>
-                            {/* Removed MapPin */}
                             <span>{event.venue}</span>
                         </div>
                       </CardHeader>
@@ -170,7 +168,6 @@ export function EventList() {
                       </CardContent>
                       <CardFooter className="flex items-center justify-between pt-4 mt-auto border-t">
                         <div className="flex items-center text-xl font-bold text-primary">
-                            {/* Removed DollarSign icon */}
                             <span>{event.price.toFixed(2)}</span>
                         </div>
                         <Button variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
