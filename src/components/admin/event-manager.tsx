@@ -49,6 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot, query, where, writeBatch } from "firebase/firestore";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 
 const eventSchemaBase = z.object({
   name: z.string().min(3, "Event name must be at least 3 characters."),
@@ -60,6 +61,8 @@ const eventSchemaBase = z.object({
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
+  // Added prefix field
+  prefix: z.string().max(10, "Prefix cannot exceed 10 characters.").optional().or(z.literal("")),
 });
 
 const eventSchema = eventSchemaBase.refine(
@@ -122,6 +125,8 @@ export function EventManager() {
       dataAiHint: "",
       onSaleDate: new Date().toISOString().split('T')[0],
       endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
+      // Default value for prefix
+      prefix: "",
     }
   });
 
@@ -189,7 +194,8 @@ export function EventManager() {
       pointsAwarded: 0,
       imageUrl: "",
       description: "",
-      dataAiHint: ""
+      dataAiHint: "",
+      prefix: "",
     });
     setIsDialogOpen(true);
   };
@@ -205,7 +211,9 @@ export function EventManager() {
         pointsAwarded: event.pointsAwarded || 0,
         imageUrl: event.imageUrl || "",
         description: event.description || "",
-        dataAiHint: event.dataAiHint || ""
+        dataAiHint: event.dataAiHint || "",
+        // Set prefix when editing
+        prefix: (event as any).prefix || "",
     });
     setIsDialogOpen(true);
   };
@@ -228,10 +236,17 @@ export function EventManager() {
     }
     setIsSubmitting(true);
     try {
-      const eventDataToSave = {
+      const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
+      const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
+      
+      const eventDataToSave: any = {
         ...data,
+        onSaleDate: onSaleTimestamp, 
+        endDate: endTimestamp,     
         price: Number(data.price),
-        pointsAwarded: Number(data.pointsAwarded || 0)
+        pointsAwarded: Number(data.pointsAwarded || 0),
+        // Ensure prefix is saved
+        prefix: data.prefix || "",
       };
 
       if (editingEvent) {
@@ -266,7 +281,8 @@ export function EventManager() {
       const allEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as TicketEvent));
 
       const pastEvents = allEvents.filter(event => {
-        const eventEndDate = new Date(event.endDate);
+        // Need to handle both string and Timestamp dates for existing data
+        const eventEndDate = event.endDate instanceof Timestamp ? event.endDate.toDate() : new Date(event.endDate);
         eventEndDate.setHours(23,59,59,999); // Consider event ended at the end of its endDate
         return eventEndDate < today;
       });
@@ -334,14 +350,15 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[90vh]"> {/* Added max-h and overflow handling */}
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          {/* Wrap form content in ScrollArea */}
+          <ScrollArea className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 pr-4"> {/* Added pr-4 for scrollbar space */}
             <div className="md:col-span-2">
               <Label htmlFor="name">Event Name</Label>
               <Input id="name" {...register("name")} disabled={isSubmitting} />
@@ -408,6 +425,14 @@ export function EventManager() {
               {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
             </div>
 
+            {/* New Prefix Input */}
+            <div className="md:col-span-2">
+              <Label htmlFor="prefix">Verification Code Prefix (Optional)</Label>
+              <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
+              {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
+            </div>
+          </ScrollArea>
+
             <DialogFooter className="md:col-span-2">
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
@@ -433,6 +458,8 @@ export function EventManager() {
               <TableHead>Price</TableHead>
               <TableHead>Points</TableHead>
               <TableHead>Current Status</TableHead>
+               {/* Add Prefix Column Header */}
+              <TableHead>Prefix</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -467,6 +494,8 @@ export function EventManager() {
                     {computedStatus.text}
                   </Badge>
                 </TableCell>
+                {/* Display Prefix */}
+                <TableCell>{(event as any).prefix || "-"}</TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting || isCleaningUp}>
                     <Edit className="h-4 w-4" />
