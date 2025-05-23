@@ -40,9 +40,9 @@ export function EventList() {
         return { 
             id: doc.id, 
             ...data,
-            // Ensure dates are strings for client-side processing
             onSaleDate: data.onSaleDate instanceof Timestamp ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
             endDate: data.endDate instanceof Timestamp ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+            pointsAwarded: data.pointsAwarded || 0,
         } as TicketEvent;
       });
       
@@ -62,7 +62,7 @@ export function EventList() {
         })
         .filter(event => {
             const eventEndDate = new Date(event.endDate);
-            eventEndDate.setHours(0,0,0,0);
+            eventEndDate.setHours(23,59,59,999); // Consider event active for the whole end date
             return today <= eventEndDate; 
         })
         .sort((a, b) => new Date(a.onSaleDate).getTime() - new Date(b.onSaleDate).getTime());
@@ -112,7 +112,7 @@ export function EventList() {
           <ScrollArea className="h-auto max-h-[70vh] lg:max-h-[calc(100vh-22rem)] -mr-4 pr-4">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {displayEvents.map((event) => (
-                <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group hover:border-primary cursor-pointer">
+                <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group cursor-pointer">
                   <Link href={`/event/${event.id}`} passHref legacyBehavior>
                     <a className="flex flex-col h-full">
                       {event.imageUrl ? (
@@ -124,7 +124,7 @@ export function EventList() {
                             style={{ objectFit: "cover" }}
                             className="transition-transform duration-500 group-hover:scale-105"
                             data-ai-hint={event.dataAiHint || "event image"}
-                            priority={displayEvents.indexOf(event) < 3} // Add priority to first few images
+                            priority={displayEvents.indexOf(event) < 3} 
                             />
                              <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
@@ -176,10 +176,8 @@ export function EventList() {
                             <DollarSign className="h-5 w-5 mr-1" />
                             {event.price.toFixed(2)}
                         </div>
-                        <Button asChild variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors" onClick={(e) => e.stopPropagation()}>
-                          <Link href={`/event/${event.id}`}>
+                        <Button variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             View Details
-                          </Link>
                         </Button>
                       </CardFooter>
                     </a>
