@@ -57,7 +57,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const [status, setStatus] = useState<{ text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } | null>(null);
   
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, updateUserLoyaltyPoints } = useAuth(); // Get updateUserLoyaltyPoints
 
   const [flowStep, setFlowStep] = useState<'initial' | 'payment' | 'purchased'>('initial');
   const [verificationCode, setVerificationCode] = useState<string | null>(null);
@@ -173,31 +173,31 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     if (event && event.name) {
       document.title = `${event.name} | TicketSwift`;
     } else if (!event && !loadingEvent) {
-      document.title = `Event Not Found | TicketSwift`;
+      document.title = 'Event Not Found | TicketSwift';
     }
   }, [event, loadingEvent]);
 
   useEffect(() => {
     if (flowStep === 'payment') {
-      setIsSubmitting(true);
-      setTimeout(() => {
+      setIsSubmitting(true); // Keep submitting true during payment simulation
+      const handlePayment = async () => {
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate payment delay
         toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
+        
+        if (user && event && event.pointsAwarded && event.pointsAwarded > 0) {
+          try {
+            await updateUserLoyaltyPoints(event.pointsAwarded); // Use context function to update Firestore
+            toast({ title: "Points Awarded!", description: `You earned ${event.pointsAwarded} loyalty points!`});
+          } catch (error) {
+             // Error is handled within updateUserLoyaltyPoints, but good to be aware
+          }
+        }
         setFlowStep('purchased'); 
         setIsSubmitting(false);
-        // Simulate awarding points after "successful" payment
-        if (user && event && event.pointsAwarded && event.pointsAwarded > 0) {
-            const currentPoints = parseInt(localStorage.getItem(`loyaltyPoints_${user.uid}`) || "0", 10);
-            const newPoints = currentPoints + event.pointsAwarded;
-            localStorage.setItem(`loyaltyPoints_${user.uid}`, newPoints.toString());
-            toast({ title: "Points Awarded!", description: `You earned ${event.pointsAwarded} loyalty points!`});
-            // This dispatch can help if HeaderLoyaltyPoints listens to custom events, or relies on a global state.
-            // For localStorage, a refresh or navigation might be needed to see header update without further mechanism.
-            window.dispatchEvent(new CustomEvent('loyaltyPointsUpdated'));
-        }
-
-      }, 2000);
+      };
+      handlePayment();
     }
-  }, [flowStep, toast, user, event]);
+  }, [flowStep, toast, user, event, updateUserLoyaltyPoints]);
 
 
   const handleInitialTicketAction = async () => {
@@ -213,6 +213,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
     const newCode = generateRandomAlphanumeric(16);
 
     try {
+      // Save with default preferences first
       const docRef = await addDoc(collection(db, 'userEventVerifications'), {
         userId: user.uid,
         eventId: event.id,
@@ -227,12 +228,17 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
       setUserVerificationDocId(docRef.id);
       setVerificationCode(newCode);
       setHasAlreadyPurchased(true);
-      setFlowStep('payment');
+      // Set default preferences in state for immediate dialog use if opened
+      setTicketCount("1");
+      setSessionPreference("");
+      setSeatPreferenceOrder("");
+      
+      setFlowStep('payment'); // This will trigger the useEffect for payment simulation
       toast({ title: "Verification Code Generated!", description: "Proceeding to simulated payment. You can set preferences after." });
     } catch (error) {
       console.error("Error saving initial verification code:", error);
       toast({ title: "Error", description: "Could not generate verification code. Please try again.", variant: "destructive" });
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Reset submission state on error before payment simulation
     }
   };
 
@@ -321,7 +327,7 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   const mainButtonText = () => {
     if (loadingPurchaseStatus) return "Checking Status...";
     if (flowStep === 'purchased' || hasAlreadyPurchased) return "Code Obtained";
-    if (flowStep === 'payment' || isSubmitting) return "Processing...";
+    if (flowStep === 'payment' || isSubmitting) return "Processing..."; // isSubmitting covers payment and preference saving
     return "Get Tickets Now";
   };
 
