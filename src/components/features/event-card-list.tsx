@@ -6,13 +6,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import Image from "next/image";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Ticket as TicketIconPlaceholder } from "lucide-react";
 import { AppLogo } from "@/components/icons/app-logo";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { db } from "@/lib/firebase"; 
-import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore"; // Added orderBy
+import { collection, query, where, onSnapshot, Timestamp, orderBy } from "firebase/firestore";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,27 +27,35 @@ export function EventList() {
   useEffect(() => {
     setIsLoading(true);
     const eventsCollectionRef = collection(db, "events");
-    const todayStr = new Date().toISOString().split('T')[0]; 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize today to the start of the day
 
-    // Query active events and order by onSaleDate
+    // Query active events: endDate is today or in the future.
+    // Order by onSaleDate (earliest first), then by endDate (earliest first) for secondary sort.
     const q = query(
       eventsCollectionRef, 
-      where("endDate", ">=", todayStr),
-      orderBy("endDate", "asc"), // Secondary sort: earlier end dates first
-      orderBy("onSaleDate", "asc") // Primary sort: earlier on-sale dates first
+      where("endDate", ">=", Timestamp.fromDate(today)), // Use Firestore Timestamp for date comparisons
+      orderBy("onSaleDate", "asc"), 
+      orderBy("endDate", "asc") 
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const todayDateOnly = new Date(); // For comparing dates without time component
+      todayDateOnly.setHours(0, 0, 0, 0);
 
       const fetchedEvents: TicketEvent[] = snapshot.docs.map(doc => {
         const data = doc.data();
+        const onSaleDateString = data.onSaleDate instanceof Timestamp 
+            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
+            : data.onSaleDate;
+        const endDateString = data.endDate instanceof Timestamp 
+            ? data.endDate.toDate().toISOString().split('T')[0] 
+            : data.endDate;
         return { 
             id: doc.id, 
             ...data,
-            onSaleDate: data.onSaleDate instanceof Timestamp ? data.onSaleDate.toDate().toISOString().split('T')[0] : data.onSaleDate,
-            endDate: data.endDate instanceof Timestamp ? data.endDate.toDate().toISOString().split('T')[0] : data.endDate,
+            onSaleDate: onSaleDateString,
+            endDate: endDateString,
             pointsAwarded: data.pointsAwarded || 0,
         } as TicketEvent;
       });
@@ -60,25 +67,25 @@ export function EventList() {
           
           let effectiveStatus: "Upcoming" | "On Sale";
 
-          if (today >= onSale) {
+          if (todayDateOnly >= onSale) {
             effectiveStatus = "On Sale";
           } else {
             effectiveStatus = "Upcoming";
           }
           return { ...event, effectiveStatus };
         })
-        .filter(event => { // This client-side filter is fine as Firestore query already filters past events
+        .filter(event => { 
             const eventEndDate = new Date(event.endDate);
             eventEndDate.setHours(23,59,59,999); 
-            return today <= eventEndDate; 
+            return todayDateOnly <= eventEndDate; 
         });
-        // Sorting is now handled by Firestore's orderBy
       
       setDisplayEvents(processedEvents);
       setIsLoading(false);
     }, (error) => {
       console.error("Error fetching events for homepage: ", error);
       toast({ title: "Error Loading Events", description: "Could not load events from the database. Please try again later.", variant: "destructive" });
+      setDisplayEvents([]); // Clear events on error to avoid contradictory UI
       setIsLoading(false);
     });
 
@@ -88,14 +95,14 @@ export function EventList() {
 
   if (isLoading) {
     return (
-      <Card className="shadow-lg w-full border flex flex-col"> {/* Ensure flex for loading state too */}
+      <Card className="shadow-lg w-full border flex flex-col h-full">
         <CardHeader className="flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
             <AppLogo className="h-7 w-7 text-primary" />
             <CardTitle className="text-2xl md:text-3xl">Featured Events</CardTitle>
           </div>
         </CardHeader>
-        <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center"> {/* Ensure it can take space */}
+        <CardContent className="flex-1 min-h-0 flex flex-col items-center justify-center">
           <LoadingSpinner size={36} />
           <p className="mt-3 text-muted-foreground">Loading upcoming events...</p>
         </CardContent>
@@ -104,7 +111,7 @@ export function EventList() {
   }
 
   return (
-    <Card className="shadow-lg w-full border flex flex-col h-full"> {/* MODIFIED: Added flex flex-col h-full */}
+    <Card className="shadow-lg w-full border flex flex-col h-full">
       <CardHeader className="flex flex-row items-center justify-between">
         <div className="flex items-center gap-2">
           <AppLogo className="h-7 w-7 text-primary" />
@@ -112,15 +119,15 @@ export function EventList() {
         </div>
         {displayEvents.length > 0 && <Badge variant="secondary" className="text-sm px-3 py-1">{displayEvents.length} Events</Badge>}
       </CardHeader>
-      <CardContent className="flex-1 min-h-0"> {/* MODIFIED: flex-1 and min-h-0 */}
+      <CardContent className="flex-1 min-h-0">
         {displayEvents.length === 0 ? (
           <div className="h-full flex items-center justify-center">
             <p className="text-muted-foreground text-center py-10 text-lg">No upcoming or on-sale events at the moment. Check back soon!</p>
           </div>
         ) : (
-          <ScrollArea className="h-full"> {/* MODIFIED: h-full */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4">
-              {displayEvents.map((event, index) => ( // Added index for priority prop
+          <ScrollArea className="h-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pr-4"> {/* Added pr-4 for scrollbar */}
+              {displayEvents.map((event, index) => (
                 <Card key={event.id} className="overflow-hidden transition-all duration-300 hover:shadow-2xl flex flex-col border group cursor-pointer">
                   <Link href={`/event/${event.id}`} passHref legacyBehavior>
                     <a className="flex flex-col h-full">
@@ -133,7 +140,7 @@ export function EventList() {
                             style={{ objectFit: "cover" }}
                             className="transition-transform duration-500 group-hover:scale-105"
                             data-ai-hint={event.dataAiHint || "event image"}
-                            priority={index < 3} // Prioritize loading for first few images
+                            priority={index < 3} 
                             />
                              <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
@@ -148,7 +155,7 @@ export function EventList() {
                         </div>
                       ) : (
                         <div className="relative h-52 w-full bg-muted flex items-center justify-center">
-                            <TicketIconPlaceholder className="w-16 h-16 text-muted-foreground/50" />
+                            <AppLogo className="w-16 h-16 text-muted-foreground/50" />
                             <div className="absolute top-2 right-2 z-10">
                                  <Badge variant={event.effectiveStatus === "On Sale" ? "default" : "secondary"}
                                    className={
@@ -165,8 +172,11 @@ export function EventList() {
                         <CardTitle className="text-xl leading-tight font-semibold group-hover:text-primary transition-colors">{event.name}</CardTitle>
                          <div className="flex items-center text-sm text-muted-foreground pt-1 space-x-2">
                             <span>{new Date(event.onSaleDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-                            <span className="text-muted-foreground/50">|</span>
-                            <span>{event.venue}</span>
+                            <span>-</span>
+                            <span>{new Date(event.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground pt-1">
+                            {event.venue}
                         </div>
                       </CardHeader>
                       <CardContent className="flex-grow pb-3">
@@ -176,7 +186,7 @@ export function EventList() {
                       </CardContent>
                       <CardFooter className="flex items-center justify-between pt-4 mt-auto border-t">
                         <div className="flex items-center text-xl font-bold text-primary">
-                            <span>{event.price.toFixed(2)}</span>
+                            <span>${event.price.toFixed(2)}</span>
                         </div>
                         <Button variant="outline" size="sm" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             View Details
@@ -193,4 +203,6 @@ export function EventList() {
     </Card>
   );
 }
+    
+
     
