@@ -50,6 +50,10 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot, query, where, writeBatch } from "firebase/firestore";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+
+
 
 const eventSchemaBase = z.object({
   name: z.string().min(3, "Event name must be at least 3 characters."),
@@ -118,6 +122,60 @@ export function EventManager() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCleaningUp, setIsCleaningUp] = useState(false);
   const { toast } = useToast();
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string>("");
+
+
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // 檢查文件類型
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid file type",
+          description: "Please select an image file",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // 檢查文件大小（例如：5MB）
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select an image smaller than 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setImageFile(file);
+      
+      // 創建預覽 URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const fileName = `events/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, fileName);
+    
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
+  };
 
   const {
     register,
@@ -213,6 +271,8 @@ export function EventManager() {
 
   const handleAddEvent = () => {
     setEditingEvent(null);
+    setImageFile(null);
+    setImagePreviewUrl("");
     const today = new Date().toISOString().split('T')[0];
     const weekLater = new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0];
     reset({
@@ -233,6 +293,8 @@ export function EventManager() {
 
   const handleEditEvent = (event: TicketEvent) => {
     setEditingEvent(event);
+    setImageFile(null);  // 添加這行
+    setImagePreviewUrl("");  // 添加這行
     reset({
         name: event.name,
         venue: event.venue,
@@ -259,45 +321,84 @@ export function EventManager() {
     }
   };
 
-  const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
-    if (!user || !isAdmin) {
-      toast({ title: "Unauthorized", description: "You are not authorized to perform this action.", variant: "destructive" });
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
-      const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
+ const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
+  if (!user || !isAdmin) {
+    toast({ title: "Unauthorized", description: "You are not authorized to perform this action.", variant: "destructive" });
+    return;
+  }
+  
+  setIsSubmitting(true);
+  try {
+    let imageUrl = data.imageUrl;
+    
+    // 如果有選擇本地圖片，先上傳
+    if (imageFile) {
+      setUploadingImage(true);
+      toast({
+        title: "Uploading image...",
+        description: "Please wait while we upload your image.",
+      });
       
-      const eventDataToSave: any = {
-        ...data,
-        onSaleDate: onSaleTimestamp, 
-        endDate: endTimestamp,     
-        price: Number(data.price),
-        pointsAwarded: Number(data.pointsAwarded || 0),
-        activityUrl: data.activityUrl, 
-        prefix: data.prefix || "",
-      };
-
-      if (editingEvent) {
-        const eventRef = doc(db, "events", editingEvent.id);
-        await updateDoc(eventRef, eventDataToSave);
-        toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
-      } else {
-        const newEventId = `evt${Date.now()}`;
-        const newEventRef = doc(db, "events", newEventId);
-        await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
-        toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
+      try {
+        imageUrl = await uploadImage(imageFile);
+        toast({
+          title: "Image uploaded",
+          description: "Your image has been uploaded successfully.",
+        });
+      } catch (error) {
+        console.error("Image upload error:", error);
+        toast({
+          title: "Image upload failed",
+          description: "Failed to upload image. Please try again.",
+          variant: "destructive"
+        });
+        setIsSubmitting(false);
+        setUploadingImage(false);
+        return;
       }
-      setIsDialogOpen(false);
-      reset();
-    } catch (error) {
-      console.error("Error saving event: ", error);
-      toast({ title: "Error", description: "Could not save event to Firestore.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
+      setUploadingImage(false);
     }
-  };
+    
+    const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
+    const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
+    
+    const eventDataToSave: any = {
+      ...data,
+      imageUrl: imageUrl || "", // 使用上傳的圖片 URL 或表單中的 URL
+      onSaleDate: onSaleTimestamp,
+      endDate: endTimestamp,
+      price: Number(data.price),
+      pointsAwarded: Number(data.pointsAwarded || 0),
+      activityUrl: data.activityUrl,
+      prefix: data.prefix || "",
+    };
+
+    if (editingEvent) {
+      const eventRef = doc(db, "events", editingEvent.id);
+      await updateDoc(eventRef, eventDataToSave);
+      toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
+    } else {
+      const newEventId = `evt${Date.now()}`;
+      const newEventRef = doc(db, "events", newEventId);
+      await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
+      toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
+    }
+    
+    setIsDialogOpen(false);
+    reset();
+    
+    // 清理圖片相關狀態
+    setImageFile(null);
+    setImagePreviewUrl("");
+    
+  } catch (error) {
+    console.error("Error saving event: ", error);
+    toast({ title: "Error", description: "Could not save event to Firestore.", variant: "destructive" });
+  } finally {
+    setIsSubmitting(false);
+    setUploadingImage(false);
+  }
+};
 
   const handleCleanUpExpiredVerifications = async () => {
     setIsCleaningUp(true);
@@ -462,14 +563,60 @@ export function EventManager() {
                   {errors.activityUrl && <p className="text-sm text-destructive">{errors.activityUrl.message}</p>}
                 </div>
 
-                {/* Image URL - takes full width */}
+                {/* Image Upload - takes full width */}
                 <div className="md:col-span-2">
-                  <Label htmlFor="imageUrl">Image URL</Label>
-                  <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
+                  <Label htmlFor="imageUpload">Event Image</Label>
+                  
+                  {/* 文件上傳輸入 */}
+                  <Input
+                    id="imageUpload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    disabled={isSubmitting}
+                    className="mb-2"
+                  />
+                  
+                  {/* 或者使用 URL */}
+                  <div className="flex items-center gap-2 my-2">
+                    <div className="h-px bg-border flex-1" />
+                    <span className="text-xs text-muted-foreground">OR</span>
+                    <div className="h-px bg-border flex-1" />
+                  </div>
+                  
+                  <Input
+                    id="imageUrl"
+                    placeholder="https://placehold.co/600x400.png"
+                    {...register("imageUrl")}
+                    disabled={isSubmitting || !!imageFile}
+                  />
                   {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
-                  {watchedImageUrl && isValidImageUrl(watchedImageUrl) && (
+                  
+                  {/* 圖片預覽 */}
+                  {(imagePreviewUrl || (watchedImageUrl && isValidImageUrl(watchedImageUrl) && !imageFile)) && (
                     <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
-                      <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} data-ai-hint="image preview" />
+                      {imagePreviewUrl ? (
+                        <img
+                          src={imagePreviewUrl}
+                          alt="Preview"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <Image
+                          src={watchedImageUrl}
+                          alt="Preview"
+                          fill
+                          style={{objectFit:"contain"}}
+                          data-ai-hint="image preview"
+                        />
+                      )}
+                    </div>
+                  )}
+                  
+                  {uploadingImage && (
+                    <div className="mt-2 text-sm text-muted-foreground flex items-center gap-2">
+                      <LoadingSpinner size={16} />
+                      Uploading image...
                     </div>
                   )}
                 </div>
