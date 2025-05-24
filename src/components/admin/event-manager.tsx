@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -52,8 +51,6 @@ import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-
-
 
 const eventSchemaBase = z.object({
   name: z.string().min(3, "Event name must be at least 3 characters."),
@@ -127,8 +124,6 @@ export function EventManager() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string>("");
 
-
-
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -164,16 +159,38 @@ export function EventManager() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
+    if (!storage) {
+      console.error("Storage is not initialized");
+      throw new Error("Storage is not initialized");
+    }
+    
     const fileName = `events/${Date.now()}_${file.name}`;
     const storageRef = ref(storage, fileName);
     
     try {
+      console.log("Starting upload to:", fileName);
+      console.log("Storage bucket:", storage.app.options.storageBucket);
+      
       const snapshot = await uploadBytes(storageRef, file);
+      console.log("Upload complete, getting download URL...");
+      
       const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log("Download URL obtained:", downloadURL);
+      
       return downloadURL;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error uploading image:", error);
-      throw error;
+      console.error("Error code:", error?.code);
+      console.error("Error message:", error?.message);
+      
+      // 提供更具體的錯誤訊息
+      if (error?.code === 'storage/unauthorized') {
+        throw new Error("Unauthorized: Please check your Storage rules and authentication");
+      } else if (error?.code === 'storage/cors') {
+        throw new Error("CORS error: Storage CORS configuration needs to be updated");
+      } else {
+        throw error;
+      }
     }
   };
 
@@ -258,7 +275,7 @@ export function EventManager() {
     return () => unsubscribe();
   }, [user, isAdmin, toast]);
 
- useEffect(() => {
+  useEffect(() => {
     if (!authLoading && !isAdmin) {
       toast({
         title: "Access Denied",
@@ -293,8 +310,8 @@ export function EventManager() {
 
   const handleEditEvent = (event: TicketEvent) => {
     setEditingEvent(event);
-    setImageFile(null);  // 添加這行
-    setImagePreviewUrl("");  // 添加這行
+    setImageFile(null);
+    setImagePreviewUrl("");
     reset({
         name: event.name,
         venue: event.venue,
@@ -321,84 +338,84 @@ export function EventManager() {
     }
   };
 
- const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
-  if (!user || !isAdmin) {
-    toast({ title: "Unauthorized", description: "You are not authorized to perform this action.", variant: "destructive" });
-    return;
-  }
-  
-  setIsSubmitting(true);
-  try {
-    let imageUrl = data.imageUrl;
+  const onSubmit: SubmitHandler<EventFormValues> = async (data) => {
+    if (!user || !isAdmin) {
+      toast({ title: "Unauthorized", description: "You are not authorized to perform this action.", variant: "destructive" });
+      return;
+    }
     
-    // 如果有選擇本地圖片，先上傳
-    if (imageFile) {
-      setUploadingImage(true);
-      toast({
-        title: "Uploading image...",
-        description: "Please wait while we upload your image.",
-      });
+    setIsSubmitting(true);
+    try {
+      let imageUrl = data.imageUrl;
       
-      try {
-        imageUrl = await uploadImage(imageFile);
+      // 如果有選擇本地圖片，先上傳
+      if (imageFile) {
+        setUploadingImage(true);
         toast({
-          title: "Image uploaded",
-          description: "Your image has been uploaded successfully.",
+          title: "Uploading image...",
+          description: "Please wait while we upload your image.",
         });
-      } catch (error) {
-        console.error("Image upload error:", error);
-        toast({
-          title: "Image upload failed",
-          description: "Failed to upload image. Please try again.",
-          variant: "destructive"
-        });
-        setIsSubmitting(false);
+        
+        try {
+          imageUrl = await uploadImage(imageFile);
+          toast({
+            title: "Image uploaded",
+            description: "Your image has been uploaded successfully.",
+          });
+        } catch (error) {
+          console.error("Image upload error:", error);
+          toast({
+            title: "Image upload failed",
+            description: "Failed to upload image. Please try again.",
+            variant: "destructive"
+          });
+          setIsSubmitting(false);
+          setUploadingImage(false);
+          return;
+        }
         setUploadingImage(false);
-        return;
       }
+      
+      const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
+      const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
+      
+      const eventDataToSave: any = {
+        ...data,
+        imageUrl: imageUrl || "", // 使用上傳的圖片 URL 或表單中的 URL
+        onSaleDate: onSaleTimestamp,
+        endDate: endTimestamp,
+        price: Number(data.price),
+        pointsAwarded: Number(data.pointsAwarded || 0),
+        activityUrl: data.activityUrl,
+        prefix: data.prefix || "",
+      };
+
+      if (editingEvent) {
+        const eventRef = doc(db, "events", editingEvent.id);
+        await updateDoc(eventRef, eventDataToSave);
+        toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
+      } else {
+        const newEventId = `evt${Date.now()}`;
+        const newEventRef = doc(db, "events", newEventId);
+        await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
+        toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
+      }
+      
+      setIsDialogOpen(false);
+      reset();
+      
+      // 清理圖片相關狀態
+      setImageFile(null);
+      setImagePreviewUrl("");
+      
+    } catch (error) {
+      console.error("Error saving event: ", error);
+      toast({ title: "Error", description: "Could not save event to Firestore.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
       setUploadingImage(false);
     }
-    
-    const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
-    const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
-    
-    const eventDataToSave: any = {
-      ...data,
-      imageUrl: imageUrl || "", // 使用上傳的圖片 URL 或表單中的 URL
-      onSaleDate: onSaleTimestamp,
-      endDate: endTimestamp,
-      price: Number(data.price),
-      pointsAwarded: Number(data.pointsAwarded || 0),
-      activityUrl: data.activityUrl,
-      prefix: data.prefix || "",
-    };
-
-    if (editingEvent) {
-      const eventRef = doc(db, "events", editingEvent.id);
-      await updateDoc(eventRef, eventDataToSave);
-      toast({ title: "Event Updated", description: "The event has been successfully updated in Firestore." });
-    } else {
-      const newEventId = `evt${Date.now()}`;
-      const newEventRef = doc(db, "events", newEventId);
-      await setDoc(newEventRef, { id: newEventId, ...eventDataToSave });
-      toast({ title: "Event Added", description: "The new event has been successfully added to Firestore." });
-    }
-    
-    setIsDialogOpen(false);
-    reset();
-    
-    // 清理圖片相關狀態
-    setImageFile(null);
-    setImagePreviewUrl("");
-    
-  } catch (error) {
-    console.error("Error saving event: ", error);
-    toast({ title: "Error", description: "Could not save event to Firestore.", variant: "destructive" });
-  } finally {
-    setIsSubmitting(false);
-    setUploadingImage(false);
-  }
-};
+  };
 
   const handleCleanUpExpiredVerifications = async () => {
     setIsCleaningUp(true);
@@ -414,7 +431,7 @@ export function EventManager() {
 
       const pastEvents = allEvents.filter((event: any) => {
         const eventEndDateValue = event.endDate;
-         if (!eventEndDateValue) return false;
+        if (!eventEndDateValue) return false;
 
         const eventEndDate = isTimestamp(eventEndDateValue)
             ? eventEndDateValue.toDate() 
@@ -466,14 +483,13 @@ export function EventManager() {
   }
 
   if (!isAdmin && !authLoading) {
-     return (
-        <div className="flex flex-col items-center justify-center h-64 text-center p-4">
-            <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
-            <h2 className="text-2xl font-semibold text-destructive mb-2">Access Denied</h2>
-            <p className="text-muted-foreground">You do not have administrative privileges to manage events.
-            </p>
-            <Button onClick={() => router.push('/')} className="mt-6">Go to Dashboard</Button>
-        </div>
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center p-4">
+        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
+        <h2 className="text-2xl font-semibold text-destructive mb-2">Access Denied</h2>
+        <p className="text-muted-foreground">You do not have administrative privileges to manage events.</p>
+        <Button onClick={() => router.push('/')} className="mt-6">Go to Dashboard</Button>
+      </div>
     );
   }
 
@@ -489,7 +505,6 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        {/* Ensure DialogContent allows internal scrolling if content overflows its max height */}
         <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
@@ -497,11 +512,9 @@ export function EventManager() {
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
-          {/* Form should allow its content (ScrollArea) to grow and handle overflow */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
-            {/* ScrollArea will contain all form fields and manage their scrolling */}
-            <ScrollArea className="h-[400px] pr-4"> {/* Added small right padding for scrollbar */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 py-4"> {/* Adjusted gap-y */}
+            <ScrollArea className="h-[400px] pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 py-4">
                 
                 <div className="md:col-span-2">
                   <Label htmlFor="name">Event Name</Label>
@@ -536,7 +549,6 @@ export function EventManager() {
                   {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
                 </div>
                 
-                {/* Points Awarded - now paired with Prefix */}
                 <div>
                   <Label htmlFor="pointsAwarded">Points Awarded</Label>
                   <div className="relative">
@@ -546,14 +558,12 @@ export function EventManager() {
                   {errors.pointsAwarded && <p className="text-sm text-destructive">{errors.pointsAwarded.message}</p>}
                 </div>
 
-                {/* Verification Code Prefix - now paired with Points Awarded */}
                 <div>
                   <Label htmlFor="prefix">Verification Code Prefix <span className="text-xs text-muted-foreground">(Optional)</span></Label>
                   <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
                   {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
                 </div>
 
-                {/* Ticketing Page URL - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="activityUrl">Ticketing Page URL</Label>
                   <div className="relative">
@@ -563,11 +573,9 @@ export function EventManager() {
                   {errors.activityUrl && <p className="text-sm text-destructive">{errors.activityUrl.message}</p>}
                 </div>
 
-                {/* Image Upload - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="imageUpload">Event Image</Label>
                   
-                  {/* 文件上傳輸入 */}
                   <Input
                     id="imageUpload"
                     type="file"
@@ -577,7 +585,6 @@ export function EventManager() {
                     className="mb-2"
                   />
                   
-                  {/* 或者使用 URL */}
                   <div className="flex items-center gap-2 my-2">
                     <div className="h-px bg-border flex-1" />
                     <span className="text-xs text-muted-foreground">OR</span>
@@ -592,22 +599,22 @@ export function EventManager() {
                   />
                   {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
                   
-                  {/* 圖片預覽 */}
                   {(imagePreviewUrl || (watchedImageUrl && isValidImageUrl(watchedImageUrl) && !imageFile)) && (
                     <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
                       {imagePreviewUrl ? (
+                        // 使用 img 標籤來顯示本地預覽
                         <img
                           src={imagePreviewUrl}
                           alt="Preview"
                           className="w-full h-full object-contain"
                         />
                       ) : (
+                        // 使用 Next.js Image 組件來顯示 URL 圖片
                         <Image
-                          src={watchedImageUrl}
+                          src={watchedImageUrl || ''}
                           alt="Preview"
                           fill
-                          style={{objectFit:"contain"}}
-                          data-ai-hint="image preview"
+                          className="object-contain"
                         />
                       )}
                     </div>
@@ -621,14 +628,12 @@ export function EventManager() {
                   )}
                 </div>
 
-                {/* Image AI Hint - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
                   <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} disabled={isSubmitting} />
                   {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
                 </div>
 
-                {/* Description - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" {...register("description")} rows={3} disabled={isSubmitting} />
@@ -637,7 +642,7 @@ export function EventManager() {
 
               </div>
             </ScrollArea>
-            <DialogFooter className="mt-auto pt-4 border-t"> {/* Added border-t for visual separation */}
+            <DialogFooter className="mt-auto pt-4 border-t">
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
@@ -651,8 +656,7 @@ export function EventManager() {
 
       <Card className="shadow-lg">
         <Table>
-          <TableCaption>A list of all ticket events from Firestore.
-          </TableCaption>
+          <TableCaption>A list of all ticket events from Firestore.</TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[100px]">Image</TableHead>
@@ -675,77 +679,82 @@ export function EventManager() {
               const validEndDate = typeof event.endDate === 'string' && event.endDate ? event.endDate : new Date().toISOString();
 
               return (
-              <TableRow key={event.id}>
-                <TableCell>
-                  {event.imageUrl ? (
-                    <div className="relative h-16 w-24 rounded overflow-hidden border">
-                      <Image src={event.imageUrl} alt={event.name} fill style={{objectFit:"cover"}} data-ai-hint={event.dataAiHint || "event image"} />
-                    </div>
-                  ) : (
-                    <div className="flex h-16 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
-                      <ImageIcon className="h-6 w-6" />
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="font-medium">{event.name}</TableCell>
-                <TableCell>{new Date(validOnSaleDate).toLocaleDateString()}</TableCell>
-                <TableCell>{new Date(validEndDate).toLocaleDateString()}</TableCell>
-                <TableCell>{event.venue}</TableCell>
-                <TableCell>${event.price.toFixed(2)}</TableCell>
-                <TableCell>{event.pointsAwarded || 0}</TableCell>
-                <TableCell>
-                  {event.activityUrl ? 
-                    <a 
-                      href={event.activityUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-600 hover:underline truncate block max-w-[150px]"
-                      title={event.activityUrl}
-                    >
-                      {event.activityUrl}
-                    </a> : '-'}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={computedStatus.variant} className={
-                      computedStatus.text === "On Sale" ? "bg-green-100 text-green-700" :
-                      computedStatus.text === "Upcoming" ? "bg-blue-100 text-blue-700" :
-                      computedStatus.text === "Past" ? "bg-red-100 text-red-700" : ""
-                  }>
-                    {computedStatus.text}
-                  </Badge>
-                </TableCell>
-                <TableCell>{(event as any).prefix || "-"}</TableCell>
-                <TableCell className="text-right space-x-2">
-                  <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting || isCleaningUp}>
-                    <Edit className="h-4 w-4" />
-                    <span className="sr-only">Edit</span>
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                       <Button variant="destructive" size="icon" disabled={isSubmitting || isCleaningUp}>
-                        <Trash2 className="h-4 w-4" />
-                         <span className="sr-only">Delete</span>
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the event &quot;{event.name}&quot; from Firestore.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteEvent(event.id)} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
-                          Yes, delete event
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </TableCell>
-              </TableRow>
-            );
-          })}
+                <TableRow key={event.id}>
+                  <TableCell>
+                    {event.imageUrl ? (
+                      <div className="relative h-16 w-24 rounded overflow-hidden border">
+                        <Image 
+                          src={event.imageUrl} 
+                          alt={event.name} 
+                          fill 
+                          className="object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-16 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
+                        <ImageIcon className="h-6 w-6" />
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-medium">{event.name}</TableCell>
+                  <TableCell>{new Date(validOnSaleDate).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(validEndDate).toLocaleDateString()}</TableCell>
+                  <TableCell>{event.venue}</TableCell>
+                  <TableCell>${event.price.toFixed(2)}</TableCell>
+                  <TableCell>{event.pointsAwarded || 0}</TableCell>
+                  <TableCell>
+                    {event.activityUrl ? 
+                      <a 
+                        href={event.activityUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="text-blue-600 hover:underline truncate block max-w-[150px]"
+                        title={event.activityUrl}
+                      >
+                        {event.activityUrl}
+                      </a> : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={computedStatus.variant} className={
+                        computedStatus.text === "On Sale" ? "bg-green-100 text-green-700" :
+                        computedStatus.text === "Upcoming" ? "bg-blue-100 text-blue-700" :
+                        computedStatus.text === "Past" ? "bg-red-100 text-red-700" : ""
+                    }>
+                      {computedStatus.text}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{(event as any).prefix || "-"}</TableCell>
+                  <TableCell className="text-right space-x-2">
+                    <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting || isCleaningUp}>
+                      <Edit className="h-4 w-4" />
+                      <span className="sr-only">Edit</span>
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="destructive" size="icon" disabled={isSubmitting || isCleaningUp}>
+                          <Trash2 className="h-4 w-4" />
+                           <span className="sr-only">Delete</span>
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the event &quot;{event.name}&quot; from Firestore.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteEvent(event.id)} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
+                            Yes, delete event
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
          {events.length === 0 && !isLoadingEvents && (
