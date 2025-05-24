@@ -144,6 +144,16 @@ export function EventManager() {
 
   const watchedImageUrl = watch("imageUrl");
 
+  const isValidImageUrl=(url:string)=>{
+    if(!url) return false;
+    try{
+      const urlObj=new URL(url);
+      return ['http:','https:'].includes(urlObj.protocol);
+    }catch{
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!user || !isAdmin) {
       setIsLoadingEvents(false);
@@ -389,7 +399,7 @@ export function EventManager() {
           {/* Form should allow its content (ScrollArea) to grow and handle overflow */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
             {/* ScrollArea will contain all form fields and manage their scrolling */}
-            <ScrollArea className="flex-grow min-h-0 p-1 pr-2"> {/* Added small right padding for scrollbar */}
+            <ScrollArea className="h-[400px] pr-4"> {/* Added small right padding for scrollbar */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 py-4"> {/* Adjusted gap-y */}
                 
                 <div className="md:col-span-2">
@@ -457,7 +467,7 @@ export function EventManager() {
                   <Label htmlFor="imageUrl">Image URL</Label>
                   <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
                   {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
-                  {watchedImageUrl && (
+                  {watchedImageUrl && isValidImageUrl(watchedImageUrl) && (
                     <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
                       <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} data-ai-hint="image preview" />
                     </div>

@@ -63,6 +63,7 @@ export type TicketEvent = {
   price: number;
   pointsAwarded?: number; // Points awarded for getting a verification code for this event
   imageUrl?: string;
+  activityUrl?: string;
   description?: string;
   dataAiHint?: string;
   prefix?: string; // For verification code prefix
