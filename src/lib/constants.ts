@@ -10,6 +10,7 @@ import {
   Download as DownloadIcon, // Renamed to avoid conflict
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { Timestamp } from "firebase/firestore"; // Import Timestamp
 
 export interface NavItem {
   title: string;
@@ -57,13 +58,14 @@ export type TicketEvent = {
   id: string;
   name: string;
   venue: string;
-  onSaleDate: string;
-  endDate: string;
+  onSaleDate: string; // Dates will be stored as YYYY-MM-DD strings in component state
+  endDate: string;   // Dates will be stored as YYYY-MM-DD strings in component state
   price: number;
   pointsAwarded?: number; // Points awarded for getting a verification code for this event
   imageUrl?: string;
   description?: string;
   dataAiHint?: string;
+  prefix?: string; // For verification code prefix
 };
 
 // Helper to generate dates for MOCK_EVENTS

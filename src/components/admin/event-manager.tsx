@@ -80,12 +80,25 @@ const eventSchema = eventSchemaBase.refine(
 
 type EventFormValues = z.infer<typeof eventSchema>;
 
+const isTimestamp = (value: any): value is Timestamp => {
+  return value !== null && typeof value === 'object' && typeof value.toDate === 'function';
+};
+
 const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive" } => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const onSale = new Date(event.onSaleDate);
+
+  // Safely create Date objects from potentially undefined/Timestamp values
+  const onSaleDateValue = event.onSaleDate;
+  const onSale = onSaleDateValue ? new Date(isTimestamp(onSaleDateValue) ? onSaleDateValue.toDate() : String(onSaleDateValue)) : null;
+
+  const endDateValue = event.endDate;
+  const end = endDateValue ? new Date(isTimestamp(endDateValue) ? endDateValue.toDate() : String(endDateValue)) : null;
+
+
+  if (!onSale || !end || isNaN(onSale.getTime()) || isNaN(end.getTime())) return { text: "Invalid Date", variant: "destructive" }; // Handle cases with invalid/missing dates
+
   onSale.setHours(0,0,0,0);
-  const end = new Date(event.endDate);
   end.setHours(0,0,0,0);
 
   if (today > end) {
@@ -140,23 +153,35 @@ export function EventManager() {
     setIsLoadingEvents(true);
     const eventsCollectionRef = collection(db, "events");
     
-    const unsubscribe = onSnapshot(query(eventsCollectionRef), (snapshot) => { // Added query() for clarity if ordering/filtering is added later
+    const unsubscribe = onSnapshot(query(eventsCollectionRef), (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => {
         const data = doc.data();
-        const onSaleDateString = data.onSaleDate instanceof Timestamp 
-            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
-            : data.onSaleDate;
-        const endDateString = data.endDate instanceof Timestamp 
-            ? data.endDate.toDate().toISOString().split('T')[0] 
-            : data.endDate;
-        return { 
-            id: doc.id, 
+        // Safely handle date parsing from Firestore Timestamps or strings
+        const onSaleDateValue = data.onSaleDate;
+        const onSaleDateString = isTimestamp(onSaleDateValue)
+            ? onSaleDateValue.toDate().toISOString().split('T')[0] 
+            : (typeof onSaleDateValue === 'string' ? onSaleDateValue : ''); // Default to empty string if not timestamp or string
+
+        const endDateValue = data.endDate;
+        const endDateString = isTimestamp(endDateValue)
+            ? endDateValue.toDate().toISOString().split('T')[0] 
+            : (typeof endDateValue === 'string' ? endDateValue : ''); // Default to empty string if not timestamp or string
+
+        return {
+            id: doc.id,
             ...data,
+            // Ensure dates are stored as strings in component state for form compatibility
             onSaleDate: onSaleDateString,
             endDate: endDateString,
             pointsAwarded: data.pointsAwarded || 0,
-        } as TicketEvent;
-      }).sort((a, b) => new Date(b.onSaleDate).getTime() - new Date(a.onSaleDate).getTime());
+        } as TicketEvent; // Cast to TicketEvent for state type safety after parsing
+      }).sort((a, b) => {
+        // Ensure dates are valid before attempting to sort
+        const dateA = a.onSaleDate ? new Date(a.onSaleDate).getTime() : 0;
+        const dateB = b.onSaleDate ? new Date(b.onSaleDate).getTime() : 0;
+        if (isNaN(dateA) || isNaN(dateB)) return 0; // Prevent NaN issues in sort
+        return dateB - dateA;
+      });
       setEvents(fetchedEvents);
       setIsLoadingEvents(false);
     }, (error) => {
@@ -236,6 +261,7 @@ export function EventManager() {
     }
     setIsSubmitting(true);
     try {
+      // Convert date strings from form back to Timestamps for Firestore
       const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
       const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
       
@@ -278,11 +304,20 @@ export function EventManager() {
     try {
       const eventsQuery = query(collection(db, "events"));
       const eventsSnapshot = await getDocs(eventsQuery);
-      const allEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as TicketEvent));
+      
+      const allEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-      const pastEvents = allEvents.filter(event => {
-        // Need to handle both string and Timestamp dates for existing data
-        const eventEndDate = event.endDate instanceof Timestamp ? event.endDate.toDate() : new Date(event.endDate);
+      const pastEvents = allEvents.filter((event: any) => { // Use any for filtering to avoid strict type checking here
+        // Safely handle date parsing for comparison
+        const eventEndDateValue = event.endDate;
+         if (!eventEndDateValue) return false; // Skip events without an end date
+
+        const eventEndDate = isTimestamp(eventEndDateValue)
+            ? eventEndDateValue.toDate() 
+            : (typeof eventEndDateValue === 'string' ? new Date(eventEndDateValue) : null); // Attempt to parse string
+
+        if (!eventEndDate || isNaN(eventEndDate.getTime())) return false; // Skip if date is invalid after parsing
+
         eventEndDate.setHours(23,59,59,999); // Consider event ended at the end of its endDate
         return eventEndDate < today;
       });
@@ -332,7 +367,8 @@ export function EventManager() {
         <div className="flex flex-col items-center justify-center h-64 text-center p-4">
             <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
             <h2 className="text-2xl font-semibold text-destructive mb-2">Access Denied</h2>
-            <p className="text-muted-foreground">You do not have administrative privileges to manage events.</p>
+            <p className="text-muted-foreground">You do not have administrative privileges to manage events.
+            </p>
             <Button onClick={() => router.push('/')} className="mt-6">Go to Dashboard</Button>
         </div>
     );
@@ -350,90 +386,90 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh]"> {/* Added max-h and overflow handling */}
+        <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]"> {/* Use flex-col for DialogContent */}
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
-          {/* Wrap form content in ScrollArea */}
-          <ScrollArea className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 pr-4"> {/* Added pr-4 for scrollbar space */}
-            <div className="md:col-span-2">
-              <Label htmlFor="name">Event Name</Label>
-              <Input id="name" {...register("name")} disabled={isSubmitting} />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="onSaleDate">On Sale Date</Label>
-              <Input id="onSaleDate" type="date" {...register("onSaleDate")} disabled={isSubmitting} />
-              {errors.onSaleDate && <p className="text-sm text-destructive">{errors.onSaleDate.message}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="endDate">End Date</Label>
-              <Input id="endDate" type="date" {...register("endDate")} disabled={isSubmitting} />
-              {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="venue">Venue</Label>
-              <Input id="venue" {...register("venue")} disabled={isSubmitting} />
-              {errors.venue && <p className="text-sm text-destructive">{errors.venue.message}</p>}
-            </div>
-
-            <div>
-              <Label htmlFor="price">Price ($)</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="price" type="number" step="0.01" {...register("price")} className="pl-7" disabled={isSubmitting} />
-              </div>
-              {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
-            </div>
-            
-            <div>
-              <Label htmlFor="pointsAwarded">Points Awarded</Label>
-               <div className="relative">
-                <Star className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input id="pointsAwarded" type="number" {...register("pointsAwarded")} className="pl-7" disabled={isSubmitting} />
-              </div>
-              {errors.pointsAwarded && <p className="text-sm text-destructive">{errors.pointsAwarded.message}</p>}
-            </div>
-
-
-            <div className="md:col-span-2">
-              <Label htmlFor="imageUrl">Image URL</Label>
-              <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
-              {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
-              {watchedImageUrl && (
-                <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
-                  <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} data-ai-hint="image preview" />
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden"> {/* form takes remaining space and allows internal scroll */}
+            <ScrollArea className="flex-grow p-1"> {/* ScrollArea takes available space and handles overflow */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 pr-4"> {/* Actual form content grid */}
+                <div className="md:col-span-2">
+                  <Label htmlFor="name">Event Name</Label>
+                  <Input id="name" {...register("name")} disabled={isSubmitting} />
+                  {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
                 </div>
-              )}
-            </div>
 
-             <div className="md:col-span-2">
-              <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
-              <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} disabled={isSubmitting} />
-              {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
-            </div>
+                <div>
+                  <Label htmlFor="onSaleDate">On Sale Date</Label>
+                  <Input id="onSaleDate" type="date" {...register("onSaleDate")} disabled={isSubmitting} />
+                  {errors.onSaleDate && <p className="text-sm text-destructive">{errors.onSaleDate.message}</p>}
+                </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" {...register("description")} rows={3} disabled={isSubmitting} />
-              {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
-            </div>
+                <div>
+                  <Label htmlFor="endDate">End Date</Label>
+                  <Input id="endDate" type="date" {...register("endDate")} disabled={isSubmitting} />
+                  {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
+                </div>
 
-            {/* New Prefix Input */}
-            <div className="md:col-span-2">
-              <Label htmlFor="prefix">Verification Code Prefix (Optional)</Label>
-              <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
-              {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
-            </div>
-          </ScrollArea>
+                <div>
+                  <Label htmlFor="venue">Venue</Label>
+                  <Input id="venue" {...register("venue")} disabled={isSubmitting} />
+                  {errors.venue && <p className="text-sm text-destructive">{errors.venue.message}</p>}
+                </div>
 
-            <DialogFooter className="md:col-span-2">
+                <div>
+                  <Label htmlFor="price">Price ($)</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="price" type="number" step="0.01" {...register("price")} className="pl-7" disabled={isSubmitting} />
+                  </div>
+                  {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
+                </div>
+                
+                <div>
+                  <Label htmlFor="pointsAwarded">Points Awarded</Label>
+                  <div className="relative">
+                    <Star className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="pointsAwarded" type="number" {...register("pointsAwarded")} className="pl-7" disabled={isSubmitting} />
+                  </div>
+                  {errors.pointsAwarded && <p className="text-sm text-destructive">{errors.pointsAwarded.message}</p>}
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label htmlFor="imageUrl">Image URL</Label>
+                  <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
+                  {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
+                  {watchedImageUrl && (
+                    <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
+                      <Image src={watchedImageUrl} alt="Preview" fill style={{objectFit:"contain"}} data-ai-hint="image preview" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
+                  <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} disabled={isSubmitting} />
+                  {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
+                </div>
+
+                <div className="md:col-span-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea id="description" {...register("description")} rows={3} disabled={isSubmitting} />
+                  {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
+                </div>
+
+                {/* New Prefix Input */}
+                <div className="md:col-span-2">
+                  <Label htmlFor="prefix">Verification Code Prefix (Optional)</Label>
+                  <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
+                  {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter className="mt-auto pt-4"> {/* Footer sticks to bottom, mt-auto pushes it down */}
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
@@ -447,7 +483,8 @@ export function EventManager() {
 
       <Card className="shadow-lg">
         <Table>
-          <TableCaption>A list of all ticket events from Firestore.</TableCaption>
+          <TableCaption>A list of all ticket events from Firestore.
+          </TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[100px]">Image</TableHead>
@@ -466,6 +503,10 @@ export function EventManager() {
           <TableBody>
             {events.map((event) => {
               const computedStatus = getEventComputedStatus(event);
+              // Ensure dates are valid strings before passing to new Date()
+              const validOnSaleDate = typeof event.onSaleDate === 'string' && event.onSaleDate ? event.onSaleDate : new Date().toISOString();
+              const validEndDate = typeof event.endDate === 'string' && event.endDate ? event.endDate : new Date().toISOString();
+
               return (
               <TableRow key={event.id}>
                 <TableCell>
@@ -480,8 +521,8 @@ export function EventManager() {
                   )}
                 </TableCell>
                 <TableCell className="font-medium">{event.name}</TableCell>
-                <TableCell>{new Date(event.onSaleDate).toLocaleDateString()}</TableCell>
-                <TableCell>{new Date(event.endDate).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(validOnSaleDate).toLocaleDateString()}</TableCell>
+                <TableCell>{new Date(validEndDate).toLocaleDateString()}</TableCell>
                 <TableCell>{event.venue}</TableCell>
                 <TableCell>${event.price.toFixed(2)}</TableCell>
                 <TableCell>{event.pointsAwarded || 0}</TableCell>
@@ -512,12 +553,12 @@ export function EventManager() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete the event &quot;{event.name}&quot; from Firestore. This does NOT delete associated user verification codes.
+                          This action cannot be undone. This will permanently delete the event &quot;{event.name}&quot; from Firestore.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDeleteEvent(event.id)} className="bg-destructive hover:bg-destructive/90">
+                        <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDeleteEvent(event.id)} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
                           Yes, delete event
                         </AlertDialogAction>
                       </AlertDialogFooter>
@@ -568,7 +609,7 @@ export function EventManager() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleCleanUpExpiredVerifications} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
+                <AlertDialogAction onClick={() => handleCleanUpExpiredVerifications} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
                   {isCleaningUp ? <LoadingSpinner className="mr-2" /> : null}
                   Yes, delete them
                 </AlertDialogAction>
