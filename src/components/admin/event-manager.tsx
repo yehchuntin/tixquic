@@ -379,18 +379,18 @@ export function EventManager() {
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         {/* Ensure DialogContent allows internal scrolling if content overflows its max height */}
-        <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-lg man-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
           {/* Form should allow its content (ScrollArea) to grow and handle overflow */}
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
             {/* ScrollArea will contain all form fields and manage their scrolling */}
-            <ScrollArea className="flex-grow min-h-0 p-1 pr-2"> {/* Added small right padding for scrollbar */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 py-4"> {/* Adjusted gap-y */}
+            <ScrollArea className="flex-grow pr-4"> {/* Added small right padding for scrollbar */}
+              <div className="space-y-4 pb-4"> {/* Adjusted gap-y */}
                 
                 <div className="md:col-span-2">
                   <Label htmlFor="name">Event Name</Label>
@@ -480,7 +480,7 @@ export function EventManager() {
 
               </div>
             </ScrollArea>
-            <DialogFooter className="mt-auto pt-4 border-t"> {/* Added border-t for visual separation */}
+            <DialogFooter className="flex-shrink-0 pt-4 border-t"> {/* Added border-t for visual separation */}
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
