@@ -36,7 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles, Star } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles, Star, Link as LinkIcon } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -49,7 +49,7 @@ import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, Timestamp, onSnapshot, query, where, writeBatch } from "firebase/firestore";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
-import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const eventSchemaBase = z.object({
   name: z.string().min(3, "Event name must be at least 3 characters."),
@@ -59,9 +59,9 @@ const eventSchemaBase = z.object({
   price: z.coerce.number().positive("Price must be a positive number."),
   pointsAwarded: z.coerce.number().int().nonnegative("Points awarded must be a non-negative integer.").optional().default(0),
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
+  activityUrl: z.string().url("Must be a valid URL for the ticketing page.").min(1, "Activity URL is required."), 
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
-  // Added prefix field
   prefix: z.string().max(10, "Prefix cannot exceed 10 characters.").optional().or(z.literal("")),
 });
 
@@ -88,15 +88,13 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Safely create Date objects from potentially undefined/Timestamp values
   const onSaleDateValue = event.onSaleDate;
   const onSale = onSaleDateValue ? new Date(isTimestamp(onSaleDateValue) ? onSaleDateValue.toDate() : String(onSaleDateValue)) : null;
 
   const endDateValue = event.endDate;
   const end = endDateValue ? new Date(isTimestamp(endDateValue) ? endDateValue.toDate() : String(endDateValue)) : null;
 
-
-  if (!onSale || !end || isNaN(onSale.getTime()) || isNaN(end.getTime())) return { text: "Invalid Date", variant: "destructive" }; // Handle cases with invalid/missing dates
+  if (!onSale || !end || isNaN(onSale.getTime()) || isNaN(end.getTime())) return { text: "Invalid Date", variant: "destructive" };
 
   onSale.setHours(0,0,0,0);
   end.setHours(0,0,0,0);
@@ -109,7 +107,6 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
   }
   return { text: "Upcoming", variant: "secondary" };
 };
-
 
 export function EventManager() {
   const { isAdmin, loading: authLoading, user } = useAuth();
@@ -131,14 +128,16 @@ export function EventManager() {
   } = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema),
     defaultValues: {
+      name: "",
+      venue: "",
       price: 0,
       pointsAwarded: 0,
       imageUrl: "",
+      activityUrl: "", 
       description: "",
       dataAiHint: "",
       onSaleDate: new Date().toISOString().split('T')[0],
       endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().split('T')[0],
-      // Default value for prefix
       prefix: "",
     }
   });
@@ -156,30 +155,28 @@ export function EventManager() {
     const unsubscribe = onSnapshot(query(eventsCollectionRef), (snapshot) => {
       const fetchedEvents = snapshot.docs.map(doc => {
         const data = doc.data();
-        // Safely handle date parsing from Firestore Timestamps or strings
         const onSaleDateValue = data.onSaleDate;
         const onSaleDateString = isTimestamp(onSaleDateValue)
             ? onSaleDateValue.toDate().toISOString().split('T')[0] 
-            : (typeof onSaleDateValue === 'string' ? onSaleDateValue : ''); // Default to empty string if not timestamp or string
+            : (typeof onSaleDateValue === 'string' ? onSaleDateValue : '');
 
         const endDateValue = data.endDate;
         const endDateString = isTimestamp(endDateValue)
             ? endDateValue.toDate().toISOString().split('T')[0] 
-            : (typeof endDateValue === 'string' ? endDateValue : ''); // Default to empty string if not timestamp or string
+            : (typeof endDateValue === 'string' ? endDateValue : '');
 
         return {
             id: doc.id,
             ...data,
-            // Ensure dates are stored as strings in component state for form compatibility
             onSaleDate: onSaleDateString,
             endDate: endDateString,
             pointsAwarded: data.pointsAwarded || 0,
-        } as TicketEvent; // Cast to TicketEvent for state type safety after parsing
+            activityUrl: data.activityUrl || "", 
+        } as TicketEvent;
       }).sort((a, b) => {
-        // Ensure dates are valid before attempting to sort
         const dateA = a.onSaleDate ? new Date(a.onSaleDate).getTime() : 0;
         const dateB = b.onSaleDate ? new Date(b.onSaleDate).getTime() : 0;
-        if (isNaN(dateA) || isNaN(dateB)) return 0; // Prevent NaN issues in sort
+        if (isNaN(dateA) || isNaN(dateB)) return 0;
         return dateB - dateA;
       });
       setEvents(fetchedEvents);
@@ -193,7 +190,6 @@ export function EventManager() {
     return () => unsubscribe();
   }, [user, isAdmin, toast]);
 
-
  useEffect(() => {
     if (!authLoading && !isAdmin) {
       toast({
@@ -204,7 +200,6 @@ export function EventManager() {
       router.push("/");
     }
   }, [authLoading, isAdmin, router, toast]);
-
 
   const handleAddEvent = () => {
     setEditingEvent(null);
@@ -218,6 +213,7 @@ export function EventManager() {
       price: 0,
       pointsAwarded: 0,
       imageUrl: "",
+      activityUrl: "", 
       description: "",
       dataAiHint: "",
       prefix: "",
@@ -235,16 +231,15 @@ export function EventManager() {
         price: event.price,
         pointsAwarded: event.pointsAwarded || 0,
         imageUrl: event.imageUrl || "",
+        activityUrl: event.activityUrl || "", 
         description: event.description || "",
         dataAiHint: event.dataAiHint || "",
-        // Set prefix when editing
         prefix: (event as any).prefix || "",
     });
     setIsDialogOpen(true);
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    // Confirmation is now handled by AlertDialog
     try {
       await deleteDoc(doc(db, "events", eventId));
       toast({ title: "Event Deleted", description: "The event has been removed from Firestore." });
@@ -261,7 +256,6 @@ export function EventManager() {
     }
     setIsSubmitting(true);
     try {
-      // Convert date strings from form back to Timestamps for Firestore
       const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
       const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
       
@@ -271,7 +265,7 @@ export function EventManager() {
         endDate: endTimestamp,     
         price: Number(data.price),
         pointsAwarded: Number(data.pointsAwarded || 0),
-        // Ensure prefix is saved
+        activityUrl: data.activityUrl, 
         prefix: data.prefix || "",
       };
 
@@ -297,8 +291,8 @@ export function EventManager() {
 
   const handleCleanUpExpiredVerifications = async () => {
     setIsCleaningUp(true);
-    const today = new Date(); // Use full Date object for comparison
-    today.setHours(0,0,0,0); // Normalize to start of day
+    const today = new Date();
+    today.setHours(0,0,0,0);
     let deletedCount = 0;
 
     try {
@@ -307,18 +301,17 @@ export function EventManager() {
       
       const allEvents = eventsSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
 
-      const pastEvents = allEvents.filter((event: any) => { // Use any for filtering to avoid strict type checking here
-        // Safely handle date parsing for comparison
+      const pastEvents = allEvents.filter((event: any) => {
         const eventEndDateValue = event.endDate;
-         if (!eventEndDateValue) return false; // Skip events without an end date
+         if (!eventEndDateValue) return false;
 
         const eventEndDate = isTimestamp(eventEndDateValue)
             ? eventEndDateValue.toDate() 
-            : (typeof eventEndDateValue === 'string' ? new Date(eventEndDateValue) : null); // Attempt to parse string
+            : (typeof eventEndDateValue === 'string' ? new Date(eventEndDateValue) : null);
 
-        if (!eventEndDate || isNaN(eventEndDate.getTime())) return false; // Skip if date is invalid after parsing
+        if (!eventEndDate || isNaN(eventEndDate.getTime())) return false;
 
-        eventEndDate.setHours(23,59,59,999); // Consider event ended at the end of its endDate
+        eventEndDate.setHours(23,59,59,999);
         return eventEndDate < today;
       });
 
@@ -357,7 +350,6 @@ export function EventManager() {
     }
   };
 
-
   if (authLoading || (isLoadingEvents && user && isAdmin)) {
     return <div className="flex justify-center items-center h-64"><LoadingSpinner size={48} /></div>;
   }
@@ -386,16 +378,20 @@ export function EventManager() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]"> {/* Use flex-col for DialogContent */}
+        {/* Ensure DialogContent allows internal scrolling if content overflows its max height */}
+        <DialogContent className="sm:max-w-lg flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{editingEvent ? "Edit Event" : "Add New Event"}</DialogTitle>
             <DialogDescription>
               {editingEvent ? "Update the details of the existing event." : "Fill in the details for the new event."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden"> {/* form takes remaining space and allows internal scroll */}
-            <ScrollArea className="flex-grow p-1"> {/* ScrollArea takes available space and handles overflow */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 pr-4"> {/* Actual form content grid */}
+          {/* Form should allow its content (ScrollArea) to grow and handle overflow */}
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-grow overflow-hidden">
+            {/* ScrollArea will contain all form fields and manage their scrolling */}
+            <ScrollArea className="flex-grow min-h-0 p-1 pr-2"> {/* Added small right padding for scrollbar */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 py-4"> {/* Adjusted gap-y */}
+                
                 <div className="md:col-span-2">
                   <Label htmlFor="name">Event Name</Label>
                   <Input id="name" {...register("name")} disabled={isSubmitting} />
@@ -429,6 +425,7 @@ export function EventManager() {
                   {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
                 </div>
                 
+                {/* Points Awarded - now paired with Prefix */}
                 <div>
                   <Label htmlFor="pointsAwarded">Points Awarded</Label>
                   <div className="relative">
@@ -438,6 +435,24 @@ export function EventManager() {
                   {errors.pointsAwarded && <p className="text-sm text-destructive">{errors.pointsAwarded.message}</p>}
                 </div>
 
+                {/* Verification Code Prefix - now paired with Points Awarded */}
+                <div>
+                  <Label htmlFor="prefix">Verification Code Prefix <span className="text-xs text-muted-foreground">(Optional)</span></Label>
+                  <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
+                  {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
+                </div>
+
+                {/* Ticketing Page URL - takes full width */}
+                <div className="md:col-span-2">
+                  <Label htmlFor="activityUrl">Ticketing Page URL</Label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input id="activityUrl" placeholder="https://example.com/ticket-page" {...register("activityUrl")} className="pl-7" disabled={isSubmitting} />
+                  </div>
+                  {errors.activityUrl && <p className="text-sm text-destructive">{errors.activityUrl.message}</p>}
+                </div>
+
+                {/* Image URL - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="imageUrl">Image URL</Label>
                   <Input id="imageUrl" placeholder="https://placehold.co/600x400.png" {...register("imageUrl")} disabled={isSubmitting} />
@@ -449,27 +464,23 @@ export function EventManager() {
                   )}
                 </div>
 
+                {/* Image AI Hint - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="dataAiHint">Image AI Hint (for placeholders)</Label>
                   <Input id="dataAiHint" placeholder="e.g., concert band" {...register("dataAiHint")} disabled={isSubmitting} />
                   {errors.dataAiHint && <p className="text-sm text-destructive">{errors.dataAiHint.message}</p>}
                 </div>
 
+                {/* Description - takes full width */}
                 <div className="md:col-span-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" {...register("description")} rows={3} disabled={isSubmitting} />
                   {errors.description && <p className="text-sm text-destructive">{errors.description.message}</p>}
                 </div>
 
-                {/* New Prefix Input */}
-                <div className="md:col-span-2">
-                  <Label htmlFor="prefix">Verification Code Prefix (Optional)</Label>
-                  <Input id="prefix" {...register("prefix")} placeholder="e.g., BP2025-" disabled={isSubmitting} />
-                  {errors.prefix && <p className="text-sm text-destructive">{errors.prefix.message}</p>}
-                </div>
               </div>
             </ScrollArea>
-            <DialogFooter className="mt-auto pt-4"> {/* Footer sticks to bottom, mt-auto pushes it down */}
+            <DialogFooter className="mt-auto pt-4 border-t"> {/* Added border-t for visual separation */}
               <DialogClose asChild>
                 <Button type="button" variant="outline" disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
@@ -494,8 +505,8 @@ export function EventManager() {
               <TableHead>Venue</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Points</TableHead>
+              <TableHead>Activity URL</TableHead> 
               <TableHead>Current Status</TableHead>
-               {/* Add Prefix Column Header */}
               <TableHead>Prefix</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -503,7 +514,6 @@ export function EventManager() {
           <TableBody>
             {events.map((event) => {
               const computedStatus = getEventComputedStatus(event);
-              // Ensure dates are valid strings before passing to new Date()
               const validOnSaleDate = typeof event.onSaleDate === 'string' && event.onSaleDate ? event.onSaleDate : new Date().toISOString();
               const validEndDate = typeof event.endDate === 'string' && event.endDate ? event.endDate : new Date().toISOString();
 
@@ -527,6 +537,18 @@ export function EventManager() {
                 <TableCell>${event.price.toFixed(2)}</TableCell>
                 <TableCell>{event.pointsAwarded || 0}</TableCell>
                 <TableCell>
+                  {event.activityUrl ? 
+                    <a 
+                      href={event.activityUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-600 hover:underline truncate block max-w-[150px]"
+                      title={event.activityUrl}
+                    >
+                      {event.activityUrl}
+                    </a> : '-'}
+                </TableCell>
+                <TableCell>
                   <Badge variant={computedStatus.variant} className={
                       computedStatus.text === "On Sale" ? "bg-green-100 text-green-700" :
                       computedStatus.text === "Upcoming" ? "bg-blue-100 text-blue-700" :
@@ -535,7 +557,6 @@ export function EventManager() {
                     {computedStatus.text}
                   </Badge>
                 </TableCell>
-                {/* Display Prefix */}
                 <TableCell>{(event as any).prefix || "-"}</TableCell>
                 <TableCell className="text-right space-x-2">
                   <Button variant="outline" size="icon" onClick={() => handleEditEvent(event)} disabled={isSubmitting || isCleaningUp}>
@@ -609,7 +630,7 @@ export function EventManager() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel disabled={isCleaningUp}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => handleCleanUpExpiredVerifications} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
+                <AlertDialogAction onClick={handleCleanUpExpiredVerifications} disabled={isCleaningUp} className="bg-destructive hover:bg-destructive/90">
                   {isCleaningUp ? <LoadingSpinner className="mr-2" /> : null}
                   Yes, delete them
                 </AlertDialogAction>
