@@ -1,0 +1,64 @@
+import { HistoryIcon } from 'lucide-react';
+import Link from 'next/link';
+
+// Assume this is your main sidebar navigation component
+// e.g., src/components/layout/app-sidebar-nav.tsx
+// You'll need to find the actual file and integrate this logic.
+
+// Placeholder for where your actual sidebar items are defined.
+// You would add the <SidebarMenuItem> within your existing <SidebarMenu>
+
+/*
+import {
+  Sidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton
+} from "@/components/ui/sidebar"; // Adjust path as needed
+
+const AppSidebarNav = () => {
+  // ... other navigation items ...
+
+  return (
+    <Sidebar>
+      <SidebarMenu>
+        // ... your existing items like Dashboard, Settings, Admin ...
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link href="/admin/events">
+              <CalendarDays className="mr-2 h-4 w-4" />
+              Manage Events
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link href="/settings">
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+
+        {/* === ADD THIS FOR HISTORY PAGE === */}
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild>
+            <Link href="/history">
+              <HistoryIcon className="mr-2 h-4 w-4" />
+              Purchase History
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+        {/* =============================== */}
+
+      </SidebarMenu>
+    </Sidebar>
+  );
+};
+
+export default AppSidebarNav;
+*/
+
+// Since I cannot know the exact structure of your AppSidebarNav.tsx,
+// I will create the placeholder history page first.
+// You will need to manually add the History link to your sidebar navigation component.
+
+console.log("Placeholder for sidebar modification. Please manually add History link.");

@@ -215,7 +215,10 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
     }
     
     setIsSubmitting(true);
-    const newCode = generateRandomAlphanumeric(16);
+    
+    const randomPart = generateRandomAlphanumeric(16);
+    const prefix = (event as any).prefix || "";
+    const newCode = prefix+randomPart;
 
     try {
       const docRef = await addDoc(collection(db, 'userEventVerifications'), {
