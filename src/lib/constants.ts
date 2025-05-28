@@ -54,20 +54,21 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export type TicketEvent = {
+export interface TicketEvent {
   id: string;
   name: string;
   venue: string;
-  onSaleDate: string; // Dates will be stored as YYYY-MM-DD strings in component state
-  endDate: string;   // Dates will be stored as YYYY-MM-DD strings in component state
+  onSaleDate: string | any; // 可能是 string 或 Timestamp
+  endDate: string | any;    // 可能是 string 或 Timestamp
   price: number;
-  pointsAwarded?: number; // Points awarded for getting a verification code for this event
+  pointsAwarded?: number;
   imageUrl?: string;
   activityUrl?: string;
+  actualTicketTime?: string | any; // 新增這一行
   description?: string;
   dataAiHint?: string;
-  prefix?: string; // For verification code prefix
-};
+  prefix?: string;
+}
 
 // Helper to generate dates for MOCK_EVENTS
 const getRelativeDate = (dayOffset: number): string => {

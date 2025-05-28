@@ -1,1 +1,19 @@
-[{"origin": ["*"],"method": ["GET", "POST", "PUT", "DELETE"],"maxAgeSeconds": 3600,"responseHeader": ["Content-Type"]}]
+[
+    {
+      "origin": [
+        "https://ticketswift-al241.web.app", 
+        "https://ticketswift-al241.firebaseapp.com",
+        "https://localhost:3000", 
+        "http://localhost:3000"
+      ],
+      "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
+      "maxAgeSeconds": 3600,
+      "responseHeader": [
+        "Content-Type", 
+        "Access-Control-Allow-Origin", 
+        "Access-Control-Allow-Methods",
+        "Access-Control-Allow-Headers",
+        "Authorization"
+      ]
+    }
+  ]

@@ -32,7 +32,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="text-center">
           <AppLogo className="mx-auto h-12 w-12 text-primary mb-4" />
-          <CardTitle className="text-3xl font-bold">Welcome to TicketSwift</CardTitle>
+          <CardTitle className="text-3xl font-bold">Welcome to TixQuic</CardTitle>
           <CardDescription className="pt-2">
             Sign in with Google to access your dashboard and features.
           </CardDescription>
@@ -45,7 +45,7 @@ export default function LoginPage() {
         </CardContent>
       </Card>
        <p className="mt-8 text-center text-sm text-muted-foreground">
-        &copy; {new Date().getFullYear()} TicketSwift Inc. All rights reserved.
+        &copy; {new Date().getFullYear()} TixQuic Inc. All rights reserved.
       </p>
     </div>
   );

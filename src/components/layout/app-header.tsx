@@ -54,7 +54,7 @@ export function AppHeader() {
       <div className="flex items-center gap-2">
         <SidebarTrigger className="h-8 w-8 md:h-7 md:w-7" /> {/* Added SidebarTrigger */}
         <Link href="/" className="text-lg font-bold text-foreground hover:text-primary transition-colors">
-          TicketSwift
+          TixQuic
         </Link>
       </div>
       <div className="flex items-center gap-2 sm:gap-4">

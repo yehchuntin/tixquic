@@ -50,7 +50,7 @@ export function AppSidebarNav() {
           <AppLogo className="h-8 w-8 text-primary flex-shrink-0" />
           {/* Text is hidden when sidebar is collapsed via icon */}
           <h1 className="text-lg font-bold group-data-[collapsible=icon]:hidden text-foreground">
-            TicketSwift
+            TixQuic
           </h1>
         </div>
       </SidebarHeader>
@@ -77,7 +77,7 @@ export function AppSidebarNav() {
       </SidebarContent>
       <SidebarFooter className="mt-auto border-t p-4">
         <p className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-          © {new Date().getFullYear()} TicketSwift Inc.
+          © {new Date().getFullYear()} TixQuic Inc.
         </p>
       </SidebarFooter>
     </>

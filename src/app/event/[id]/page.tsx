@@ -1,47 +1,67 @@
+'use client';
 
-"use client"; 
-
-import type { Metadata, ResolvingMetadata } from 'next';
-import { doc, getDoc, Timestamp, collection, query, where, getDocs, addDoc, serverTimestamp, limit, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { type TicketEvent } from '@/lib/constants';
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { doc, getDoc, Timestamp, updateDoc, collection, addDoc } from "firebase/firestore"; 
 import Image from 'next/image';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/contexts/auth-context";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { CalendarIcon, MapPinIcon, TicketIcon, StarIcon, DollarSignIcon, AlertTriangle, ArrowLeft, InfoIcon, ShoppingCart, FileTextIcon, LightbulbIcon } from "lucide-react"; 
+import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
-import { CalendarDays, MapPin, DollarSign, Ticket, AlertTriangle, ArrowLeft, Lightbulb, Eye, EyeOff, Copy, CheckCircle, Loader2, Settings2, Edit3, Star } from 'lucide-react';
-import Link from 'next/link';
-import { useEffect, useState, FormEvent } from 'react'; 
-import { LoadingSpinner } from '@/components/shared/loading-spinner'; 
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from '@/contexts/auth-context';
-import { useParams } from 'next/navigation'; // Import useParams
 
-interface EventDetailPageProps {
-  // params prop is still passed by Next.js, but we'll use useParams for the ID.
-  params: { id: string }; 
+interface TicketEvent {
+  id: string;
+  name: string;
+  date?: Timestamp;
+  endDate?: Timestamp;
+  venue: string;
+  description: string;
+  price: number;
+  totalTickets: number;
+  ticketsSold: number;
+  imageUrl?: string; 
+  category?: string;
+  organizer?: string;
+  onSaleDate?: Timestamp;
+  status?: string; 
+  loyaltyPointsEarned?: number; 
 }
 
-const getEventDisplayStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate'>): { text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } => {
+interface EventDetailPageProps {
+  params: { id: string };
+}
+
+const calculateEventStatus = (event: TicketEvent | null): { text: string; badgeClass: string; isActionable: boolean } | null => {
+  if (!event || !event.onSaleDate?.seconds || !event.endDate?.seconds) {
+    return { text: "Status Unavailable", badgeClass: "bg-gray-500 text-white", isActionable: false };
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const onSale = new Date(event.onSaleDate);
-  onSale.setHours(0,0,0,0);
-  const end = new Date(event.endDate);
-  end.setHours(0,0,0,0);
+  const onSale = new Date(event.onSaleDate.seconds * 1000); 
+  onSale.setHours(0, 0, 0, 0);
+  const end = new Date(event.endDate.seconds * 1000); 
+  end.setHours(0, 0, 0, 0);
 
-  if (today > end) {
-    return { text: "Past Event", variant: "destructive", isActionable: false };
-  }
+  if (today > end) return { text: "Past Event", badgeClass: "bg-red-600 text-white", isActionable: false };
   if (today >= onSale) {
-    return { text: "On Sale", variant: "default", isActionable: true };
+    if (event.ticketsSold >= event.totalTickets) return { text: "Sold Out", badgeClass: "bg-red-600 text-white", isActionable: false };
+    return { text: "On Sale", badgeClass: "bg-green-500 text-white", isActionable: true }; 
   }
-  return { text: "Upcoming", variant: "secondary", isActionable: false };
+  return { text: "Upcoming", badgeClass: "bg-yellow-500 text-black", isActionable: false }; 
 };
 
 const generateRandomAlphanumeric = (length: number): string => {
@@ -53,527 +73,224 @@ const generateRandomAlphanumeric = (length: number): string => {
   return result;
 };
 
-export default function EventDetailPage({ params: routePassedParams }: EventDetailPageProps) { // Renamed params to avoid conflict with hook result
+export default function EventDetailPage({ params: routePassedParams }: EventDetailPageProps) {
   const pathParams = useParams();
-  const eventId = pathParams.id as string; // Get ID from useParams hook
+  const eventId = (pathParams.id || routePassedParams?.id) as string; 
 
   const [event, setEvent] = useState<TicketEvent | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
-  const [status, setStatus] = useState<{ text: string; variant: "secondary" | "default" | "destructive"; isActionable: boolean } | null>(null);
-  
+  const [statusInfo, setStatusInfo] = useState<{ text: string; badgeClass: string; isActionable: boolean } | null>(null); 
+  const [showRedeemDialog, setShowRedeemDialog] = useState(false);
+  const [pointsToRedeem, setPointsToRedeem] = useState<number | string>("");
+
   const { toast } = useToast();
-  const { user, loading: authLoading, updateUserLoyaltyPoints } = useAuth();
-
-  const [flowStep, setFlowStep] = useState<'initial' | 'payment' | 'purchased'>('initial');
-  const [verificationCode, setVerificationCode] = useState<string | null>(null);
-  const [showVerificationCode, setShowVerificationCode] = useState(false);
-  const [userVerificationDocId, setUserVerificationDocId] = useState<string | null>(null);
-  const [hasAlreadyPurchased, setHasAlreadyPurchased] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingPurchaseStatus, setLoadingPurchaseStatus] = useState(true);
-
-  const [isPreferenceDialogOpen, setIsPreferenceDialogOpen] = useState(false);
-  const [ticketCount, setTicketCount] = useState("1");
-  const [sessionPreference, setSessionPreference] = useState("");
-  const [seatPreferenceOrder, setSeatPreferenceOrder] = useState("");
-
+  const { user, loading: authLoading, updateUserLoyaltyPoints, loyaltyPoints } = useAuth(); 
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchEvent = async () => {
-      setLoadingEvent(true);
-      setLoadingPurchaseStatus(true);
-      try {
-        const eventDocRef = doc(db, 'events', eventId); // Use eventId from useParams
-        const eventSnap = await getDoc(eventDocRef);
-
-        if (eventSnap.exists()) {
-          const data = eventSnap.data();
-          const onSaleDateString = data.onSaleDate instanceof Timestamp 
-            ? data.onSaleDate.toDate().toISOString().split('T')[0] 
-            : data.onSaleDate;
-          const endDateString = data.endDate instanceof Timestamp 
-            ? data.endDate.toDate().toISOString().split('T')[0] 
-            : data.endDate;
-
-          const fetchedEvent = { 
-            id: eventSnap.id, 
-            ...data,
-            onSaleDate: onSaleDateString,
-            endDate: endDateString,
-            pointsAwarded: data.pointsAwarded || 0,
-          } as TicketEvent;
-          setEvent(fetchedEvent);
-          setStatus(getEventDisplayStatus(fetchedEvent));
-        } else {
+    if (eventId) {
+      const fetchEvent = async () => {
+        setLoadingEvent(true);
+        try {
+          const eventDocRef = doc(db, "events", eventId);
+          const eventSnap = await getDoc(eventDocRef);
+          if (eventSnap.exists()) {
+            const eventData = { id: eventSnap.id, ...eventSnap.data() } as TicketEvent;
+            setEvent(eventData);
+            setStatusInfo(calculateEventStatus(eventData));
+          } else {
+            setEvent(null);
+            setStatusInfo({ text: "Event Not Found", badgeClass: "bg-red-600 text-white", isActionable: false });
+          }
+        } catch (error) {
+          console.error("Error fetching event:", error);
+          toast({ title: "Error", description: "Could not fetch event details.", variant: "destructive" });
           setEvent(null);
-          setStatus(null);
+          setStatusInfo({ text: "Error Loading", badgeClass: "bg-red-600 text-white", isActionable: false });
         }
-      } catch (error) {
-        console.error("Error fetching event:", error);
-        setEvent(null);
-        setStatus(null);
-        toast({ title: "Error", description: "Could not fetch event details.", variant: "destructive" });
-      } finally {
         setLoadingEvent(false);
-      }
-    };
-
-    if (eventId) { // Use eventId from useParams
+      };
       fetchEvent();
     }
-  }, [eventId, toast]); // Depend on eventId from useParams
+  }, [eventId, toast]);
 
-  useEffect(() => {
-    if (!event || !user || authLoading) {
-      if (!authLoading && event) setLoadingPurchaseStatus(false);
-      return;
-    }
+  const handlePurchase = async (redeemedPointsValue: number = 0) => {
+    if (!user || !event || !statusInfo || !statusInfo.isActionable) return;
 
-    setLoadingPurchaseStatus(true);
-    const checkPurchaseStatus = async () => {
-      try {
-        const verificationsRef = collection(db, 'userEventVerifications');
-        const q = query(verificationsRef, 
-          where('userId', '==', user.uid), 
-          where('eventId', '==', event.id), // event.id is correct here, as event is fetched based on eventId
-          limit(1)
-        );
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const purchaseDoc = querySnapshot.docs[0];
-          const purchaseData = purchaseDoc.data();
-          setUserVerificationDocId(purchaseDoc.id);
-          setVerificationCode(purchaseData.verificationCode);
-          setTicketCount(purchaseData.ticketCount?.toString() || "1");
-          setSessionPreference(purchaseData.sessionPreference || "");
-          setSeatPreferenceOrder(purchaseData.seatPreferenceOrder || "");
-          setHasAlreadyPurchased(true);
-          setFlowStep('purchased');
-        } else {
-          setUserVerificationDocId(null);
-          setVerificationCode(null);
-          setHasAlreadyPurchased(false);
-          setFlowStep('initial');
-          setTicketCount("1");
-          setSessionPreference("");
-          setSeatPreferenceOrder("");
-        }
-      } catch (error) {
-        console.error("Error checking purchase status:", error);
-        toast({ title: "Error", description: "Could not verify purchase status.", variant: "destructive" });
-        setHasAlreadyPurchased(false);
-        setFlowStep('initial');
-      } finally {
-        setLoadingPurchaseStatus(false);
-      }
-    };
-
-    checkPurchaseStatus();
-
-  }, [event, user, authLoading, toast]);
-
-
-  useEffect(() => {
-    if (event && event.name) {
-      document.title = `${event.name} | TicketSwift`;
-    } else if (!event && !loadingEvent) {
-      document.title = `Event Not Found | TicketSwift`;
-    }
-  }, [event, loadingEvent]);
-
-  useEffect(() => {
-    if (flowStep === 'payment') {
-      setIsSubmitting(true); 
-      const handlePayment = async () => {
-        await new Promise(resolve => setTimeout(resolve, 2000)); 
-        toast({title: "Payment Successful (Simulated)", description: "Your verification is confirmed."});
-        
-        if (user && event && event.pointsAwarded && event.pointsAwarded > 0) {
-          try {
-            await updateUserLoyaltyPoints(event.pointsAwarded); 
-            toast({ title: "Points Awarded!", description: `You earned ${event.pointsAwarded} loyalty points!`});
-          } catch (error) {
-             // Error is handled within updateUserLoyaltyPoints
-          }
-        }
-        setFlowStep('purchased'); 
-        setIsSubmitting(false);
-      };
-      handlePayment();
-    }
-  }, [flowStep, toast, user, event, updateUserLoyaltyPoints]);
-
-
-  const handleInitialTicketAction = async () => {
-    if (!user) {
-        toast({ title: "Authentication Required", description: "Please log in to get tickets.", variant: "destructive"});
-        return;
-    }
-    if (!event || !status || !status.isActionable || hasAlreadyPurchased || flowStep !== 'initial') {
-      return;
-    }
-    
-    setIsSubmitting(true);
-    
-    const randomPart = generateRandomAlphanumeric(16);
-    const prefix = (event as any).prefix || "";
-    const newCode = prefix+randomPart;
-
+    const finalPrice = Math.max(0, event.price - redeemedPointsValue);
     try {
-      const docRef = await addDoc(collection(db, 'userEventVerifications'), {
-        userId: user.uid,
-        eventId: event.id, // event.id is correct here
-        eventName: event.name,
-        verificationCode: newCode,
-        ticketCount: 1, 
-        sessionPreference: "", 
-        seatPreferenceOrder: "", 
-        purchaseDate: serverTimestamp(),
+      const orderRef = await addDoc(collection(db, "users", user.uid, "orders"), {
+        eventId: event.id, eventName: event.name, purchaseDate: Timestamp.now(),
+        pricePaid: finalPrice, pointsRedeemed: redeemedPointsValue,
+        ticketCode: `TIX-${generateRandomAlphanumeric(8)}`, status: "confirmed",
       });
+      await updateDoc(doc(db, "events", event.id), { ticketsSold: (event.ticketsSold || 0) + 1 });
+      if (redeemedPointsValue > 0 && updateUserLoyaltyPoints) await updateUserLoyaltyPoints(-redeemedPointsValue);
       
-      setUserVerificationDocId(docRef.id);
-      setVerificationCode(newCode);
-      setHasAlreadyPurchased(true);
-      setTicketCount("1");
-      setSessionPreference("");
-      setSeatPreferenceOrder("");
-      
-      setFlowStep('payment'); 
-      toast({ title: "Verification Code Generated!", description: "Proceeding to simulated payment. You can set preferences after." });
+      const pointsAwardedForPurchase = (event.loyaltyPointsEarned && event.loyaltyPointsEarned > 0 && finalPrice > 0)
+        ? Math.floor(finalPrice * (event.loyaltyPointsEarned / 100))
+        : 0;
+      if (pointsAwardedForPurchase > 0 && updateUserLoyaltyPoints) await updateUserLoyaltyPoints(pointsAwardedForPurchase);
+
+      toast({ title: "Purchase Successful!", description: `Ticket for ${event.name} purchased. Code: ${orderRef.id.substring(0,8)}. You earned ${pointsAwardedForPurchase} points.` });
     } catch (error) {
-      console.error("Error saving initial verification code:", error);
-      toast({ title: "Error", description: "Could not generate verification code. Please try again.", variant: "destructive" });
-      setIsSubmitting(false); 
+      console.error("Error during purchase:", error);
+      toast({ title: "Purchase Failed", description: "Please try again.", variant: "destructive" });
     }
+    setShowRedeemDialog(false); setPointsToRedeem("");
   };
 
-  const handleOpenPreferenceDialog = () => {
-    setIsPreferenceDialogOpen(true);
-  };
-
-  const handlePreferenceFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!user || !event || !userVerificationDocId) {
-        toast({title: "Error", description: "Cannot save preferences. User or event data missing.", variant: "destructive"});
-        return;
-    }
-
-    const parsedTicketCount = parseInt(ticketCount, 10);
-    if (isNaN(parsedTicketCount) || parsedTicketCount <= 0) {
-      toast({ title: "Invalid Input", description: "Ticket count must be a positive number.", variant: "destructive" });
+  const handleRedeemPoints = () => {
+    const points = Number(pointsToRedeem);
+    if (isNaN(points) || points < 0 || points > (loyaltyPoints || 0)) {
+      toast({ title: "Invalid Points", description: `Enter valid points, up to ${loyaltyPoints || 0}.`, variant: "destructive" });
       return;
     }
-
-    setIsSubmitting(true);
-    try {
-      const verificationDocRef = doc(db, 'userEventVerifications', userVerificationDocId);
-      await updateDoc(verificationDocRef, {
-        ticketCount: parsedTicketCount,
-        sessionPreference: sessionPreference.trim(),
-        seatPreferenceOrder: seatPreferenceOrder.trim(),
-      });
-      
-      toast({ title: "Preferences Saved!", description: "Your preferences have been updated." });
-      setIsPreferenceDialogOpen(false);
-    } catch (error) {
-      console.error("Error updating preferences:", error);
-      toast({ title: "Error", description: "Could not save your preferences. Please try again.", variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
+    handlePurchase(points);
   };
 
-
-  const copyToClipboard = () => {
-    if (verificationCode) {
-      navigator.clipboard.writeText(verificationCode)
-        .then(() => {
-          toast({ title: "Copied!", description: "Verification code copied to clipboard." });
-        })
-        .catch(err => {
-          toast({ title: "Copy Failed", description: "Could not copy code.", variant: "destructive" });
-          console.error('Failed to copy: ', err);
-        });
-    }
-  };
-
-  if (loadingEvent || authLoading) {
-    return (
-      <div className="container mx-auto py-10 text-center flex justify-center items-center min-h-[calc(100vh-10rem)]">
-        <LoadingSpinner size={48} />
+  if (loadingEvent || authLoading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><p className="text-gray-300">Loading event details...</p></div>;
+  if (!event || !statusInfo) return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+      <div className="bg-gray-900 p-8 rounded-lg shadow-2xl text-center max-w-md w-full">
+          <AlertTriangle className="h-16 w-16 text-red-500 mb-4 mx-auto" />
+          <h2 className="text-2xl font-bold text-white mb-2">Event Not Found</h2>
+          <p className="text-gray-400 mb-6">ID: {eventId || 'Unknown'} not found.</p>
+          <Button asChild variant="outline" className="text-gray-300 border-gray-700 hover:bg-gray-800 hover:text-white">
+            <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Back to Home</Link>
+          </Button>
       </div>
-    );
+    </div>
+  );
+
+  const imageUrl = event.imageUrl;
+  let isValidDisplayUrl = false;
+  if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('https://firebasestorage.googleapis.com/')) {
+    try { new URL(imageUrl); isValidDisplayUrl = true; } catch (e) { console.error('Invalid image URL:', imageUrl, e); }
   }
-
-  if (!event || !status) {
-    return (
-      <div className="container mx-auto py-10 text-center">
-        <Card className="max-w-lg mx-auto shadow-lg border-destructive">
-          <CardHeader className="items-center">
-             <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
-            <CardTitle className="text-2xl">Event Not Found</CardTitle>
-            <CardDescription>
-              The event you are looking for (ID: {eventId}) does not exist or may have been removed.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild variant="outline">
-              <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Events
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const mainButtonText = () => {
-    if (loadingPurchaseStatus) return "Checking Status...";
-    if (flowStep === 'purchased' || hasAlreadyPurchased) return "Code Obtained";
-    if (flowStep === 'payment' || isSubmitting) return "Processing...";
-    return "Get Verfication code";
-  };
-
-  const isButtonDisabled = () => {
-    if (loadingPurchaseStatus || isSubmitting || flowStep === 'purchased' || hasAlreadyPurchased || flowStep === 'payment') return true;
-    return !status.isActionable;
-  };
-
+  
+  const calculatedPointsEarned = (event.loyaltyPointsEarned && event.loyaltyPointsEarned > 0 && event.price > 0)
+    ? Math.floor(event.price * (event.loyaltyPointsEarned / 100))
+    : 0;
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <div>
-        <Button asChild variant="outline" size="sm" className="mb-6 hover:bg-muted/80 transition-colors">
-          <Link href="/">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to All Events
-          </Link>
+    <div className="min-h-screen bg-gray-950 text-gray-300 py-6">
+      <div className="container mx-auto px-4 md:px-6 lg:px-8">
+        <Button variant="ghost" className="mb-6 text-gray-400 hover:text-gray-200" asChild>
+          <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />Back to All Events</Link>
         </Button>
-      </div>
 
-      <Card className="overflow-hidden shadow-xl border">
-        {event.imageUrl && (
-          <div className="relative w-full h-72 md:h-[500px] bg-muted/50">
-            <Image
-              src={event.imageUrl}
-              alt={event.name}
-              fill 
-              style={{ objectFit: "cover" }} 
-              data-ai-hint={event.dataAiHint || "event highlight"}
-              priority 
-            />
-             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-             <div className="absolute bottom-0 left-0 p-6 md:p-10">
-                <Badge 
-                    variant={status.variant} 
-                    className={`text-base px-4 py-2 mb-3 rounded-md shadow-lg
-                        ${status.text === "On Sale" ? "bg-green-600 hover:bg-green-700 text-white border-green-700" : 
-                          status.text === "Upcoming" ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-700" :
-                          "bg-red-600 hover:bg-red-700 text-white border-red-700"}`}
-                >
-                    {status.text}
-                </Badge>
-                <h1 className="text-4xl md:text-6xl font-extrabold text-white" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>{event.name}</h1>
+        <div className="relative w-full h-[300px] sm:h-[350px] md:h-[400px] lg:h-[450px] mb-8 shadow-2xl rounded-lg overflow-hidden group">
+          {isValidDisplayUrl && imageUrl ? (
+            <Image src={imageUrl} alt={event.name || "Event image"} layout="fill" objectFit="cover" priority unoptimized={true} className="transition-transform duration-300 group-hover:scale-105"/>
+          ) : (
+            <div className="h-full w-full bg-gray-800 flex items-center justify-center"><TicketIcon className="h-32 w-32 text-gray-600" /></div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-4 sm:p-6 md:p-8 flex flex-col justify-end">
+            {statusInfo && (
+              <Badge className={`text-xs md:text-sm px-3 py-1 self-start mb-2 md:mb-3 shadow-md ${statusInfo.badgeClass}`}>
+                {statusInfo.text}
+              </Badge>
+            )}
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white leading-tight">
+              {event.name}
+            </h1>
+          </div>
+        </div>
+        
+        <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+          <div className="md:col-span-2 space-y-6">
+            <div className="bg-gray-900 p-6 rounded-lg shadow-xl">
+              <div className="flex items-center mb-4">
+                <FileTextIcon className="h-6 w-6 mr-3 text-purple-400" />
+                <h2 className="text-xl sm:text-2xl font-semibold text-purple-400">Event Description</h2>
+              </div>
+              {/* Simplified event description rendering to isolate the error */}
+              <div className="text-sm sm:text-base text-gray-300 whitespace-pre-line leading-relaxed space-y-3">
+                <p>{event.description}</p>
+              </div>
             </div>
           </div>
-        )}
-        
-        <CardContent className="p-6 md:p-8 grid md:grid-cols-3 gap-8 md:gap-12">
-          <div className="md:col-span-2 space-y-6">
-            {!event.imageUrl && ( 
-                 <div className="mb-4">
-                    <Badge 
-                        variant={status.variant} 
-                         className={`text-sm px-3 py-1 mb-2 
-                            ${status.text === "On Sale" ? "bg-green-100 text-green-700 border-green-200" : 
-                              status.text === "Upcoming" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                              "bg-red-100 text-red-700 border-red-200"}`}
-                    >
-                        {status.text}
-                    </Badge>
-                    <h1 className="text-3xl md:text-4xl font-bold text-foreground">{event.name}</h1>
+
+          <div className="space-y-6 md:sticky md:top-6 h-fit">
+            <div className="bg-gray-900 p-6 rounded-lg shadow-xl">
+              <h3 className="text-xl md:text-2xl font-semibold text-gray-100 mb-6">Event Details</h3>
+              <div className="space-y-5">
+                {[ { icon: CalendarIcon, label: "On Sale:", value: event.onSaleDate && new Date(event.onSaleDate.seconds * 1000).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) },
+                  { icon: CalendarIcon, label: "Ends:", value: event.endDate && new Date(event.endDate.seconds * 1000).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) },
+                  { icon: MapPinIcon, label: "Venue:", value: event.venue },
+                  (calculatedPointsEarned > 0 && { icon: StarIcon, label: "Points Earned:", value: `${calculatedPointsEarned} points` })
+                ].filter(Boolean).map((item: any, index: number) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <item.icon className={`h-5 w-5 ${item.label === "Points Earned:" ? "text-yellow-500" : "text-gray-400"} mt-0.5`} />
+                    <div>
+                      <p className="text-xs sm:text-sm text-gray-400">{item.label}</p>
+                      <p className="text-sm sm:text-base font-medium text-gray-200">{item.value}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="border-t border-gray-700 pt-5">
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <DollarSignIcon className="h-7 w-7 md:h-8 md:w-8 text-purple-400" />
+                    <span className="text-3xl md:text-4xl font-bold text-purple-400">
+                      ${event.price.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-            )}
-            <div>
-              <h2 className="text-2xl font-semibold mb-3 text-primary flex items-center">
-                <Ticket className="mr-2 h-6 w-6" />
-                Event Description
-              </h2>
-              <p className="text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                {event.description || "No detailed description available for this event."}
+
+                <div className="pt-3">
+                  {statusInfo.isActionable && (
+                    <Button size="lg" className="w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg bg-purple-600 hover:bg-purple-700 text-white" onClick={() => user ? setShowRedeemDialog(true) : router.push(`/login?redirect=/event/${eventId}`)}>
+                      <ShoppingCart className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                      {user ? "Get Verification Code" : "Login to Get Code"}
+                    </Button>
+                  )}
+                  {!statusInfo.isActionable && (
+                    <Button size="lg" className="w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg bg-gray-700 text-gray-400 cursor-not-allowed" disabled>
+                      <InfoIcon className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />{statusInfo.text}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-900 p-6 rounded-lg shadow-xl">
+              <div className="flex items-center mb-3">
+                <LightbulbIcon className="h-6 w-6 mr-3 text-yellow-400" />
+                <h4 className="text-lg font-semibold text-yellow-400">AI Seat Predictor</h4>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                Want the best chance for this event? Our AI can help predict optimal sections. (Feature coming soon for specific events)
               </p>
             </div>
-             {event.pointsAwarded && event.pointsAwarded > 0 && (
-              <div className="mt-4 p-4 bg-accent/10 border border-accent/30 rounded-md flex items-center gap-2">
-                <Star className="h-5 w-5 text-accent fill-accent/20" />
-                <p className="text-sm text-accent-foreground">
-                  Get <strong className="font-semibold">{event.pointsAwarded} loyalty points</strong> for obtaining a verification code for this event!
-                </p>
+          </div>
+        </div>
+      </div>
+
+      {user && event && (
+        <AlertDialog open={showRedeemDialog} onOpenChange={setShowRedeemDialog}>
+          <AlertDialogContent className="bg-gray-900 border-gray-700">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-gray-100">Redeem Loyalty Points</AlertDialogTitle>
+              <AlertDialogDescription className="text-gray-400">
+                You have {loyaltyPoints || 0} loyalty points. Ticket price: ${event.price?.toFixed(2) || '0.00'}.
+                Use points for a discount?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="points" className="text-right text-gray-300">Points to Redeem</Label>
+                <Input id="points" type="number" value={pointsToRedeem} onChange={(e) => setPointsToRedeem(e.target.value)} className="col-span-3 bg-gray-800 text-gray-200 border-gray-700 focus:ring-purple-500" max={loyaltyPoints || 0} min="0"/>
               </div>
-            )}
-          </div>
-
-          <div className="space-y-8 md:border-l md:pl-8 md:pt-0 pt-8 border-t md:border-t-0">
-            <div className="space-y-4">
-                <h3 className="text-xl font-semibold text-primary">Event Details</h3>
-                <div className="flex items-start text-foreground">
-                    <CalendarDays className="mr-3 h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
-                    <div>
-                        <span className="font-medium">On Sale:</span><br/> 
-                        {new Date(event.onSaleDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </div>
-                </div>
-                <div className="flex items-start text-foreground">
-                    <CalendarDays className="mr-3 h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
-                    <div>
-                        <span className="font-medium">Ends:</span><br/> 
-                        {new Date(event.endDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </div>
-                </div>
-                <div className="flex items-start text-foreground">
-                    <MapPin className="mr-3 h-5 w-5 mt-1 text-muted-foreground flex-shrink-0" />
-                    <div>
-                        <span className="font-medium">Venue:</span><br/> 
-                        {event.venue}
-                    </div>
-                </div>
-                <div className="flex items-center text-3xl font-bold text-primary mt-4">
-                    <DollarSign className="mr-2 h-7 w-7" />
-                    <span>{event.price.toFixed(2)}</span>
-                </div>
             </div>
-            
-            { (flowStep === 'purchased' || hasAlreadyPurchased) && !loadingPurchaseStatus && (
-              <Alert variant="default" className="bg-green-50 border-green-200 text-green-700">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertTitle className="font-semibold">Verification Code Obtained</AlertTitle>
-                <AlertDescription>
-                  You have obtained a verification code for this event. You can set or update your preferences below.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {(flowStep === 'purchased' || hasAlreadyPurchased) && verificationCode && !loadingPurchaseStatus && (
-              <Card className="bg-secondary/20 border-primary/30">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center justify-between text-primary/90">
-                    Your Verification Code
-                    <Button variant="outline" size="sm" onClick={handleOpenPreferenceDialog} disabled={isSubmitting}>
-                        <Edit3 className="mr-2 h-4 w-4" /> Set/Edit Preferences
-                    </Button>
-                  </CardTitle>
-                  <CardDescription className="text-sm text-muted-foreground">
-                    Use this code and your saved preferences in the TicketSwift desktop application.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      id="verificationCode"
-                      type={showVerificationCode ? "text" : "password"}
-                      value={verificationCode}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button variant="ghost" size="icon" onClick={() => setShowVerificationCode(!showVerificationCode)} aria-label={showVerificationCode ? "Hide code" : "Show code"}>
-                      {showVerificationCode ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={copyToClipboard} aria-label="Copy code">
-                      <Copy className="h-5 w-5" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            <Button 
-              size="lg" 
-              className="w-full text-lg py-3" 
-              disabled={isButtonDisabled()}
-              onClick={handleInitialTicketAction}
-            >
-              {isSubmitting || loadingPurchaseStatus ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Ticket className="mr-2 h-5 w-5" />}
-              {mainButtonText()}
-            </Button>
-
-            <Dialog open={isPreferenceDialogOpen} onOpenChange={setIsPreferenceDialogOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center">
-                    <Settings2 className="mr-2 h-5 w-5 text-primary" />
-                    Set/Edit Your Preferences
-                  </DialogTitle>
-                  <DialogDescription>
-                    These preferences will be saved with your verification code for this event.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handlePreferenceFormSubmit} className="space-y-4 py-2">
-                  <div>
-                    <Label htmlFor="ticketCountPref">Number of Tickets</Label>
-                    <Input 
-                      id="ticketCountPref" 
-                      type="number" 
-                      value={ticketCount} 
-                      onChange={(e) => setTicketCount(e.target.value)} 
-                      min="1" 
-                      max="10" 
-                      required 
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="sessionPreferencePref">Session Preference (if applicable)</Label>
-                    <Input 
-                      id="sessionPreferencePref" 
-                      type="text" 
-                      placeholder="e.g., Any, Matinee, Evening" 
-                      value={sessionPreference} 
-                      onChange={(e) => setSessionPreference(e.target.value)} 
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="seatPreferenceOrderPref">Seat Preference Order</Label>
-                    <Textarea 
-                      id="seatPreferenceOrderPref" 
-                      placeholder="e.g., Section A, Row 1-5; ..." 
-                      value={seatPreferenceOrder} 
-                      onChange={(e) => setSeatPreferenceOrder(e.target.value)} 
-                      rows={3} 
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <DialogFooter className="mt-6">
-                    <Button type="button" variant="outline" onClick={() => setIsPreferenceDialogOpen(false)} disabled={isSubmitting}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                      Save Preferences
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-            
-            <Card className="mt-8 bg-secondary/20 border-primary/30">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center text-primary/90">
-                  <Lightbulb className="mr-2 h-5 w-5 text-accent" />
-                  AI Seat Predictor
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  Want the best chance for this event? Our AI can help predict optimal sections. (Feature coming soon for specific events)
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </div>
-        </CardContent>
-      </Card>
+            <AlertDialogFooter>
+              <Button variant="outline" className="text-gray-300 border-gray-700 hover:bg-gray-800 hover:text-white" onClick={() => handlePurchase(0)}>No, Purchase Full Price</Button>
+              <Button className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleRedeemPoints} disabled={Number(pointsToRedeem) <= 0 || Number(pointsToRedeem) > (loyaltyPoints || 0)} >Redeem & Purchase</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
-

@@ -35,7 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles, Star, Link as LinkIcon } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Settings, AlertTriangle, DollarSign, Image as ImageIcon, CalendarDays, Sparkles, Star, Link as LinkIcon, Clock } from "lucide-react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -60,7 +60,8 @@ const eventSchemaBase = z.object({
   price: z.coerce.number().positive("Price must be a positive number."),
   pointsAwarded: z.coerce.number().int().nonnegative("Points awarded must be a non-negative integer.").optional().default(0),
   imageUrl: z.string().url("Must be a valid URL for the image.").optional().or(z.literal("")),
-  activityUrl: z.string().url("Must be a valid URL for the ticketing page.").min(1, "Activity URL is required."), 
+  activityUrl: z.string().url("Must be a valid URL for the ticketing page.").min(1, "Activity URL is required."),
+  actualTicketTime: z.string().refine((datetime) => !isNaN(Date.parse(datetime)), "Invalid ticket time format.").optional().or(z.literal("")),
   description: z.string().optional(),
   dataAiHint: z.string().optional(),
   prefix: z.string().max(10, "Prefix cannot exceed 10 characters.").optional().or(z.literal("")),
@@ -109,6 +110,61 @@ const getEventComputedStatus = (event: Pick<TicketEvent, 'onSaleDate' | 'endDate
   return { text: "Upcoming", variant: "secondary" };
 };
 
+// Enhanced image validation and handling
+const isValidImageUrl = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    const urlObj = new URL(url);
+    return ['http:', 'https:'].includes(urlObj.protocol);
+  } catch {
+    return false;
+  }
+};
+
+// Safe image component with error handling
+const SafeImage = ({ src, alt, className, width, height }: { 
+  src: string; 
+  alt: string; 
+  className?: string; 
+  width?: number; 
+  height?: number; 
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  if (!src || imageError || !isValidImageUrl(src)) {
+    return (
+      <div className={`flex items-center justify-center bg-muted text-muted-foreground ${className}`}>
+        <ImageIcon className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative ${className}`}>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted">
+          <LoadingSpinner size={16} />
+        </div>
+      )}
+      <Image
+        src={src}
+        alt={alt}
+        width={width || 96}
+        height={height || 64}
+        className="object-cover"
+        style={{ width: '100%', height: '100%' }}
+        onLoad={() => setIsLoading(false)}
+        onError={() => {
+          setImageError(true);
+          setIsLoading(false);
+        }}
+        unoptimized // This helps with external URLs
+      />
+    </div>
+  );
+};
+
 export function EventManager() {
   const { isAdmin, loading: authLoading, user } = useAuth();
   const router = useRouter();
@@ -127,7 +183,7 @@ export function EventManager() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // 檢查文件類型
+      // Check file type
       if (!file.type.startsWith('image/')) {
         toast({
           title: "Invalid file type",
@@ -137,7 +193,7 @@ export function EventManager() {
         return;
       }
       
-      // 檢查文件大小（例如：5MB）
+      // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         toast({
           title: "File too large",
@@ -149,7 +205,7 @@ export function EventManager() {
       
       setImageFile(file);
       
-      // 創建預覽 URL
+      // Create preview URL
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreviewUrl(reader.result as string);
@@ -164,7 +220,7 @@ export function EventManager() {
       throw new Error("Storage is not initialized");
     }
     
-    const fileName = `events/${Date.now()}_${file.name}`;
+    const fileName = `events/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const storageRef = ref(storage, fileName);
     
     try {
@@ -183,7 +239,7 @@ export function EventManager() {
       console.error("Error code:", error?.code);
       console.error("Error message:", error?.message);
       
-      // 提供更具體的錯誤訊息
+      // Provide more specific error messages
       if (error?.code === 'storage/unauthorized') {
         throw new Error("Unauthorized: Please check your Storage rules and authentication");
       } else if (error?.code === 'storage/cors') {
@@ -208,7 +264,8 @@ export function EventManager() {
       price: 0,
       pointsAwarded: 0,
       imageUrl: "",
-      activityUrl: "", 
+      activityUrl: "",
+      actualTicketTime: "",
       description: "",
       dataAiHint: "",
       onSaleDate: new Date().toISOString().split('T')[0],
@@ -218,16 +275,6 @@ export function EventManager() {
   });
 
   const watchedImageUrl = watch("imageUrl");
-
-  const isValidImageUrl=(url:string)=>{
-    if(!url) return false;
-    try{
-      const urlObj=new URL(url);
-      return ['http:','https:'].includes(urlObj.protocol);
-    }catch{
-      return false;
-    }
-  };
 
   useEffect(() => {
     if (!user || !isAdmin) {
@@ -250,13 +297,19 @@ export function EventManager() {
             ? endDateValue.toDate().toISOString().split('T')[0] 
             : (typeof endDateValue === 'string' ? endDateValue : '');
 
+        const actualTicketTimeValue = data.actualTicketTime;
+        const actualTicketTimeString = isTimestamp(actualTicketTimeValue)
+            ? actualTicketTimeValue.toDate().toISOString()
+            : (typeof actualTicketTimeValue === 'string' ? actualTicketTimeValue : '');
+
         return {
             id: doc.id,
             ...data,
             onSaleDate: onSaleDateString,
             endDate: endDateString,
+            actualTicketTime: actualTicketTimeString,
             pointsAwarded: data.pointsAwarded || 0,
-            activityUrl: data.activityUrl || "", 
+            activityUrl: data.activityUrl || "",
         } as TicketEvent;
       }).sort((a, b) => {
         const dateA = a.onSaleDate ? new Date(a.onSaleDate).getTime() : 0;
@@ -300,7 +353,8 @@ export function EventManager() {
       price: 0,
       pointsAwarded: 0,
       imageUrl: "",
-      activityUrl: "", 
+      activityUrl: "",
+      actualTicketTime: "",
       description: "",
       dataAiHint: "",
       prefix: "",
@@ -320,7 +374,9 @@ export function EventManager() {
         price: event.price,
         pointsAwarded: event.pointsAwarded || 0,
         imageUrl: event.imageUrl || "",
-        activityUrl: event.activityUrl || "", 
+        activityUrl: event.activityUrl || "",
+        actualTicketTime: (event as any).actualTicketTime ? 
+          new Date((event as any).actualTicketTime).toISOString().slice(0, 16) : "",
         description: event.description || "",
         dataAiHint: event.dataAiHint || "",
         prefix: (event as any).prefix || "",
@@ -348,7 +404,7 @@ export function EventManager() {
     try {
       let imageUrl = data.imageUrl;
       
-      // 如果有選擇本地圖片，先上傳
+      // If local image is selected, upload it first
       if (imageFile) {
         setUploadingImage(true);
         toast({
@@ -378,12 +434,15 @@ export function EventManager() {
       
       const onSaleTimestamp = Timestamp.fromDate(new Date(data.onSaleDate));
       const endTimestamp = Timestamp.fromDate(new Date(data.endDate));
+      const actualTicketTimestamp = data.actualTicketTime ? 
+        Timestamp.fromDate(new Date(data.actualTicketTime)) : null;
       
       const eventDataToSave: any = {
         ...data,
-        imageUrl: imageUrl || "", // 使用上傳的圖片 URL 或表單中的 URL
+        imageUrl: imageUrl || "",
         onSaleDate: onSaleTimestamp,
         endDate: endTimestamp,
+        actualTicketTime: actualTicketTimestamp,
         price: Number(data.price),
         pointsAwarded: Number(data.pointsAwarded || 0),
         activityUrl: data.activityUrl,
@@ -404,7 +463,7 @@ export function EventManager() {
       setIsDialogOpen(false);
       reset();
       
-      // 清理圖片相關狀態
+      // Clean up image-related state
       setImageFile(null);
       setImagePreviewUrl("");
       
@@ -574,6 +633,29 @@ export function EventManager() {
                 </div>
 
                 <div className="md:col-span-2">
+                  <Label htmlFor="actualTicketTime">
+                    實際搶票時間 
+                    <span className="text-xs text-muted-foreground ml-1">(台北時間)</span>
+                  </Label>
+                  <div className="relative">
+                    <Clock className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input 
+                      id="actualTicketTime" 
+                      type="datetime-local" 
+                      {...register("actualTicketTime")} 
+                      className="pl-7"
+                      disabled={isSubmitting} 
+                    />
+                  </div>
+                  {errors.actualTicketTime && (
+                    <p className="text-sm text-destructive">{errors.actualTicketTime.message}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-1">
+                    請設定準確的搶票開始時間，系統將在此時間自動開始搶票
+                  </p>
+                </div>
+
+                <div className="md:col-span-2">
                   <Label htmlFor="imageUpload">Event Image</Label>
                   
                   <Input
@@ -602,19 +684,16 @@ export function EventManager() {
                   {(imagePreviewUrl || (watchedImageUrl && isValidImageUrl(watchedImageUrl) && !imageFile)) && (
                     <div className="mt-2 relative w-full h-32 overflow-hidden rounded border">
                       {imagePreviewUrl ? (
-                        // 使用 img 標籤來顯示本地預覽
                         <img
                           src={imagePreviewUrl}
                           alt="Preview"
                           className="w-full h-full object-contain"
                         />
                       ) : (
-                        // 使用 Next.js Image 組件來顯示 URL 圖片
-                        <Image
+                        <SafeImage
                           src={watchedImageUrl || ''}
                           alt="Preview"
-                          fill
-                          className="object-contain"
+                          className="w-full h-full"
                         />
                       )}
                     </div>
@@ -666,7 +745,8 @@ export function EventManager() {
               <TableHead>Venue</TableHead>
               <TableHead>Price</TableHead>
               <TableHead>Points</TableHead>
-              <TableHead>Activity URL</TableHead> 
+              <TableHead>Activity URL</TableHead>
+              <TableHead>搶票時間</TableHead>
               <TableHead>Current Status</TableHead>
               <TableHead>Prefix</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -681,20 +761,13 @@ export function EventManager() {
               return (
                 <TableRow key={event.id}>
                   <TableCell>
-                    {event.imageUrl ? (
-                      <div className="relative h-16 w-24 rounded overflow-hidden border">
-                        <Image 
-                          src={event.imageUrl} 
-                          alt={event.name} 
-                          fill 
-                          className="object-cover"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex h-16 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
-                        <ImageIcon className="h-6 w-6" />
-                      </div>
-                    )}
+                    <SafeImage
+                      src={event.imageUrl || ''}
+                      alt={event.name || 'Event Image'}
+                      className="h-16 w-24 rounded overflow-hidden border"
+                      width={96}
+                      height={64}
+                    />
                   </TableCell>
                   <TableCell className="font-medium">{event.name}</TableCell>
                   <TableCell>{new Date(validOnSaleDate).toLocaleDateString()}</TableCell>
@@ -713,6 +786,16 @@ export function EventManager() {
                       >
                         {event.activityUrl}
                       </a> : '-'}
+                  </TableCell>
+                  <TableCell>
+                    {(event as any).actualTicketTime ? 
+                      new Date((event as any).actualTicketTime).toLocaleString('zh-TW', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
                   </TableCell>
                   <TableCell>
                     <Badge variant={computedStatus.variant} className={

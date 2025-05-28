@@ -25,7 +25,7 @@ const robotoMono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TicketSwift",
+  title: "TixQuic ",
   description: "Your ultimate tool for securing event tickets.",
 };
 

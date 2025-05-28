@@ -8,22 +8,22 @@ export default function HowToUsePage() {
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center gap-3 mb-6">
         <BookOpenText className="h-10 w-10 text-primary" />
-        <h1 className="text-3xl font-bold">How to Use TicketSwift</h1>
+        <h1 className="text-3xl font-bold">How to Use TixQuic</h1>
       </div>
       <CardDescription className="text-lg">
-        Welcome to TicketSwift! This guide explains how the system works and how to use this web application and the future desktop app.
+        Welcome to TixQuic! This guide explains how the system works and how to use this web application and the future desktop app.
       </CardDescription>
 
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-6 w-6 text-primary" />
-            <CardTitle>1. Understanding TicketSwift</CardTitle>
+            <CardTitle>1. Understanding TixQuic</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           <p>
-            TicketSwift is a two-part system designed to help you secure event tickets:
+            TixQuic is a two-part system designed to help you secure event tickets:
           </p>
           <ol className="list-decimal list-inside space-y-2 pl-4">
             <li>
@@ -73,7 +73,7 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent className="space-y-2">
            <p>
-            Once you have your verification code and have set your preferences via this web app, you'll need the TicketSwift desktop application.
+            Once you have your verification code and have set your preferences via this web app, you'll need the TixQuic desktop application.
           </p>
           <p>
             Navigate to the <Link href="/download" className="text-primary hover:underline font-medium">Download App</Link> page from the sidebar to find download links (when available) and installation instructions for the desktop application.
@@ -82,7 +82,7 @@ export default function HowToUsePage() {
             In the desktop application, you will input your verification code. The app will then use this code to retrieve your saved event details and preferences to run the ticket-snatching script.
           </p>
            <p className="text-sm text-muted-foreground">
-            The TicketSwift desktop application is currently under development.
+            The TixQuic desktop application is currently under development.
           </p>
         </CardContent>
       </Card>
@@ -96,10 +96,10 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p>
-            Some advanced AI features within the TicketSwift ecosystem (potentially in the desktop app or future web features) may require an OpenAI API Key.
+            Some advanced AI features within the TixQuic ecosystem (potentially in the desktop app or future web features) may require an OpenAI API Key.
           </p>
           <p>
-            To add or update your API key for use with TicketSwift services:
+            To add or update your API key for use with TixQuic services:
           </p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
             <li>Navigate to the <Link href="/settings" className="text-primary hover:underline font-medium">Settings</Link> page from the sidebar.</li>
@@ -121,7 +121,7 @@ export default function HowToUsePage() {
         </CardHeader>
         <CardContent className="space-y-2">
           <p>
-            As you obtain verification codes (simulated purchases), you'll accumulate Loyalty Points! These points can be used for future benefits within the TicketSwift ecosystem.
+            As you obtain verification codes (simulated purchases), you'll accumulate Loyalty Points! These points can be used for future benefits within the TixQuic ecosystem.
           </p>
           <p>
             You can see your current points balance in the header (top right), next to the theme toggle, when you are logged in.

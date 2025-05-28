@@ -9,10 +9,10 @@ export default function DownloadPage() {
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center gap-3 mb-6">
         <Download className="h-10 w-10 text-primary" />
-        <h1 className="text-3xl font-bold">Download TicketSwift Desktop App</h1>
+        <h1 className="text-3xl font-bold">Download TixQuic Desktop App</h1>
       </div>
       <CardDescription className="text-lg">
-        Get the TicketSwift desktop application to automate your ticket purchasing using the verification codes obtained from this web app.
+        Get the TixQuic desktop application to automate your ticket purchasing using the verification codes obtained from this web app.
       </CardDescription>
 
       <Card className="shadow-lg">
@@ -24,7 +24,7 @@ export default function DownloadPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p>
-            The TicketSwift desktop application is a powerful tool designed to work in tandem with this web platform. Once you obtain a verification code for an event through this website, you'll input that code into the desktop app.
+            The TixQuic desktop application is a powerful tool designed to work in tandem with this web platform. Once you obtain a verification code for an event through this website, you'll input that code into the desktop app.
           </p>
           <p>
             The desktop app will then use your saved preferences (ticket count, session, seat order) associated with that code to run an automated script, helping you secure tickets for your chosen event the moment they go on sale.
