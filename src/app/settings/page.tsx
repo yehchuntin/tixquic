@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
-import { db } from "@/lib/firebase"; // Correctly import the initialized db instance
-import { doc, setDoc, getDoc } from "firebase/firestore"; // Removed getFirestore
+import { db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { Eye, EyeOff } from "lucide-react";
 
 const API_KEY_STORAGE_KEY = "openai_api_key";
 
@@ -19,13 +20,21 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isKeyLoading, setIsKeyLoading] = useState(true);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  useEffect(() => {
+    // 如果使用者登出，清空 API 金鑰
+    if (!user && !authLoading) {
+      setApiKey("");
+      setShowApiKey(false); // 重設顯示狀態
+    }
+  }, [user, authLoading]);
 
   useEffect(() => {
     const loadApiKey = async () => {
       setIsKeyLoading(true);
       if (user) {
         try {
-          // const db = getFirestore(firebaseApp); // Removed this line, use imported 'db'
           const userDocRef = doc(db, "users", user.uid);
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists() && docSnap.data()?.openaiApiKey) {
@@ -37,14 +46,14 @@ export default function SettingsPage() {
             }
           }
         } catch (error) {
-          console.error("Error fetching API key from Firestore:", error);
+          console.error("從 Firestore 獲取 API 金鑰時發生錯誤:", error);
           const storedApiKey = localStorage.getItem(API_KEY_STORAGE_KEY);
           if (storedApiKey) {
             setApiKey(storedApiKey);
           }
           toast({
-            title: "Error Loading API Key",
-            description: "Could not load API key from your account. Please check console.",
+            title: "載入 API 金鑰錯誤",
+            description: "無法從您的帳戶載入 API 金鑰。請檢查控制台。",
             variant: "destructive",
           });
         }
@@ -67,8 +76,8 @@ export default function SettingsPage() {
 
     if (!user) {
       toast({
-        title: "Authentication Error",
-        description: "You must be logged in to save an API key to your account.",
+        title: "驗證錯誤",
+        description: "您必須先登入才能將 API 金鑰儲存到您的帳戶。",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -77,8 +86,8 @@ export default function SettingsPage() {
 
     if (!apiKey.trim()) {
       toast({
-        title: "Invalid API Key",
-        description: "API Key cannot be empty.",
+        title: "無效的 API 金鑰",
+        description: "API 金鑰不能為空。",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -86,21 +95,20 @@ export default function SettingsPage() {
     }
 
     try {
-      // const db = getFirestore(firebaseApp); // Removed this line, use imported 'db'
       const userDocRef = doc(db, "users", user.uid);
       await setDoc(userDocRef, { openaiApiKey: apiKey.trim() }, { merge: true });
 
       localStorage.setItem(API_KEY_STORAGE_KEY, apiKey.trim());
 
       toast({
-        title: "API Key Saved",
-        description: "Your OpenAI API Key has been securely saved to your account.",
+        title: "API 金鑰已儲存",
+        description: "您的 OpenAI API 金鑰已安全地儲存到您的帳戶。",
       });
     } catch (error) {
-      console.error("Failed to save API key:", error);
+      console.error("儲存 API 金鑰失敗:", error);
       toast({
-        title: "Error Saving API Key",
-        description: "Could not save API key to your account. Please check console for details.",
+        title: "儲存 API 金鑰錯誤",
+        description: "無法將 API 金鑰儲存到您的帳戶。請檢查控制台以取得詳細資訊。",
         variant: "destructive",
       });
     } finally {
@@ -108,41 +116,69 @@ export default function SettingsPage() {
     }
   };
 
+  const toggleShowApiKey = () => {
+    setShowApiKey(!showApiKey);
+  };
+
   return (
     <div className="container mx-auto py-10">
       <Card className="w-full max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle>OpenAI API Key</CardTitle>
+          <CardTitle>OpenAI API 金鑰</CardTitle>
           <CardDescription>
-            Manage your OpenAI API Key for AI-powered features. This key will be securely stored
-            with your account.
+            管理您的 OpenAI API 金鑰以使用 AI 功能。此金鑰將安全地儲存在您的帳戶中。
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="api-key">Your OpenAI API Key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="sk-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                disabled={isKeyLoading || authLoading}
-              />
+              <Label htmlFor="api-key">您的 OpenAI API 金鑰</Label>
+              <div className="relative">
+                <Input
+                  id="api-key"
+                  type={showApiKey ? "text" : "password"}
+                  placeholder="sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  disabled={isKeyLoading || authLoading}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={toggleShowApiKey}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isKeyLoading || authLoading || !user}
+                  tabIndex={-1}
+                >
+                  {showApiKey ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Your API key is used to interact with OpenAI services for features like advanced seat prediction.
-                It is stored securely and only used for this purpose.
+                {!user 
+                  ? "請先登入以管理您的 API 金鑰設定"
+                  : "您的 API 金鑰用於與 OpenAI 服務互動，例如進階座位預測等功能。金鑰將被安全地儲存，僅用於此目的。"
+                }
               </p>
             </div>
-            {authLoading && <p>Loading authentication details...</p>}
-            {isKeyLoading && !authLoading && <p>Loading your API key...</p>}
+            {authLoading && <p>正在載入驗證詳細資訊...</p>}
+            {isKeyLoading && !authLoading && <p>正在載入您的 API 金鑰...</p>}
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="flex flex-col items-start space-y-2">
           <Button onClick={handleSaveApiKey} disabled={isLoading || isKeyLoading || authLoading || !user}>
-            {isLoading ? "Saving..." : "Save API Key"}
+            {isLoading ? "儲存中..." : "儲存 API 金鑰"}
           </Button>
+          {!user && !authLoading && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md w-full">
+              <p className="text-sm text-blue-800">
+                💡 請先登入您的帳戶以儲存和管理 API 金鑰設定
+              </p>
+            </div>
+          )}
         </CardFooter>
       </Card>
     </div>

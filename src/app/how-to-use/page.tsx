@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpenText, Lightbulb, KeyRound, Settings, Star, Ticket, MonitorPlay, Globe, Download as DownloadIcon } from "lucide-react"; 
 import Link from "next/link";
@@ -8,29 +7,27 @@ export default function HowToUsePage() {
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center gap-3 mb-6">
         <BookOpenText className="h-10 w-10 text-primary" />
-        <h1 className="text-3xl font-bold">How to Use TixQuic</h1>
+        <h1 className="text-3xl font-bold">如何使用 TixQuic</h1>
       </div>
       <CardDescription className="text-lg">
-        Welcome to TixQuic! This guide explains how the system works and how to use this web application and the future desktop app.
+        歡迎使用 TixQuic！本指南將說明系統的運作原理，以及如何使用本網站與未來推出的桌面應用程式。
       </CardDescription>
 
       <Card className="shadow-lg">
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-6 w-6 text-primary" />
-            <CardTitle>1. Understanding TixQuic</CardTitle>
+            <CardTitle>1. 認識 TixQuic</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p>
-            TixQuic is a two-part system designed to help you secure event tickets:
-          </p>
+          <p>TixQuic 是一套協助你搶票的雙端系統：</p>
           <ol className="list-decimal list-inside space-y-2 pl-4">
             <li>
-              <strong className="flex items-center gap-1"><Globe className="h-5 w-5 text-accent" />This Web Application:</strong> Its main purpose is to allow you to browse upcoming events, obtain a unique <strong className="text-primary">Verification Code</strong> for events you're interested in, and set your ticket preferences (number of tickets, session, seat order).
+              <strong className="flex items-center gap-1"><Globe className="h-5 w-5 text-accent" />網站端：</strong>你可以在這裡瀏覽活動、取得專屬的 <strong className="text-primary">驗證碼</strong>，並設定搶票偏好（票數、場次、座位順序）。
             </li>
             <li>
-              <strong className="flex items-center gap-1"><MonitorPlay className="h-5 w-5 text-accent" />Future Desktop Application:</strong> You will input the Verification Code obtained from this web app into a separate desktop application. This desktop app will then use the code and your saved preferences to identify the event and run an automated ticket-snatching script for it.
+              <strong className="flex items-center gap-1"><MonitorPlay className="h-5 w-5 text-accent" />桌面應用程式（開發中）：</strong>你會在此輸入驗證碼，應用程式會根據此驗證碼與偏好設定，自動執行搶票腳本。
             </li>
           </ol>
         </CardContent>
@@ -40,50 +37,36 @@ export default function HowToUsePage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Ticket className="h-6 w-6 text-primary" />
-            <CardTitle>2. Getting Event Verification Codes (This Web App)</CardTitle>
+            <CardTitle>2. 取得活動驗證碼（網站端）</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p>
-            On the <Link href="/" className="text-primary hover:underline font-medium">Dashboard</Link>, you'll find a list of featured events. Each card shows event details and price.
-          </p>
-          <p>
-            To get a verification code for an event:
-          </p>
+          <p>前往 <Link href="/" className="text-primary hover:underline font-medium">首頁</Link>，你會看到活動清單與票價資訊。</p>
+          <p>若想獲得驗證碼，請依照以下步驟操作：</p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Click on an event card or its "View Details" button.</li>
-            <li>On the event detail page, if the event is "On Sale", click the "Get Tickets Now" button.</li>
-            <li>This will generate your unique 16-character alphanumeric verification code and save it to your account for this event.</li>
-            <li>The "payment" step is currently simulated.</li>
-            <li>After obtaining the code, you can click "Set/Edit Preferences" to specify your ticket count, session, and seat order preferences. These preferences are saved with your code.</li>
-            <li>Your verification code will be displayed on the page. You can copy it for later use.</li>
+            <li>點擊活動卡片或「查看詳情」。</li>
+            <li>若活動尚在販售中，點擊「立即解鎖驗證碼」。</li>
+            <li>系統將產生你專屬的 16 碼驗證碼，並儲存至你的帳戶。</li>
+            <li>目前購買流程為模擬流程（後續將接入金流）。</li>
+            <li>取得驗證碼後，可點選「修改偏好設定」來設定票數、場次、座位偏好。</li>
+            <li>驗證碼會顯示在頁面上，可複製使用。</li>
           </ol>
-           <p className="text-sm text-muted-foreground">
-            Note: You must be logged in to obtain a verification code and set preferences.
-          </p>
+          <p className="text-sm text-muted-foreground">注意：你必須先登入才能取得驗證碼與設定偏好。</p>
         </CardContent>
       </Card>
-      
+
       <Card className="shadow-lg" id="download-app">
         <CardHeader>
           <div className="flex items-center gap-2">
             <DownloadIcon className="h-6 w-6 text-primary" />
-            <CardTitle>3. Downloading and Using the Desktop App</CardTitle>
+            <CardTitle>3. 下載桌面應用程式</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-           <p>
-            Once you have your verification code and have set your preferences via this web app, you'll need the TixQuic desktop application.
-          </p>
-          <p>
-            Navigate to the <Link href="/download" className="text-primary hover:underline font-medium">Download App</Link> page from the sidebar to find download links (when available) and installation instructions for the desktop application.
-          </p>
-          <p>
-            In the desktop application, you will input your verification code. The app will then use this code to retrieve your saved event details and preferences to run the ticket-snatching script.
-          </p>
-           <p className="text-sm text-muted-foreground">
-            The TixQuic desktop application is currently under development.
-          </p>
+          <p>完成驗證碼與偏好設定後，你將需要安裝 TixQuic 桌面應用程式。</p>
+          <p>請前往 <Link href="/download" className="text-primary hover:underline font-medium">下載頁面</Link>，取得桌面版應用程式安裝檔與使用說明。</p>
+          <p>在桌面程式中輸入驗證碼後，系統會自動比對活動與偏好設定並執行搶票腳本。</p>
+          <p className="text-sm text-muted-foreground">目前桌面應用程式尚在開發中。</p>
         </CardContent>
       </Card>
 
@@ -91,24 +74,20 @@ export default function HowToUsePage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <KeyRound className="h-6 w-6 text-primary" />
-            <CardTitle>4. OpenAI API Key Setup</CardTitle>
+            <CardTitle>4. 設定 OpenAI API 金鑰</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p>
-            Some advanced AI features within the TixQuic ecosystem (potentially in the desktop app or future web features) may require an OpenAI API Key.
-          </p>
-          <p>
-            To add or update your API key for use with TixQuic services:
-          </p>
+          <p>為使用 TixQuic 的 AI 功能（如自動識別驗證碼、偏好預測等），你需要提供 OpenAI API 金鑰。</p>
+          <p>請依照下列步驟設定：</p>
           <ol className="list-decimal list-inside space-y-1 pl-4">
-            <li>Navigate to the <Link href="/settings" className="text-primary hover:underline font-medium">Settings</Link> page from the sidebar.</li>
-            <li>Enter your OpenAI API Key in the designated field.</li>
-            <li>Click "Save API Key". Your key will be stored securely in your browser's local storage for this prototype.</li>
+            <li>前往 <a href="https://platform.openai.com/account/api-keys" target="_blank" className="text-primary hover:underline font-medium">OpenAI API 金鑰申請頁面</a>。</li>
+            <li>登入或註冊帳號後，點選「+ Create new secret key」。</li>
+            <li>複製產生的金鑰（類似於 <code>sk-xxxx</code> 的字串）。</li>
+            <li>回到本網站，點選左側選單的 <Link href="/settings" className="text-primary hover:underline font-medium">設定頁面</Link>。</li>
+            <li>將 API 金鑰貼上並儲存，即可啟用 AI 功能。</li>
           </ol>
-          <p className="text-sm text-muted-foreground">
-            Note: In a production environment, API keys would be managed with more robust backend security.
-          </p>
+          <p className="text-sm text-muted-foreground">注意：目前金鑰儲存在瀏覽器本地端。未來正式版本會改為安全的後端儲存機制。</p>
         </CardContent>
       </Card>
 
@@ -116,33 +95,27 @@ export default function HowToUsePage() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Star className="h-6 w-6 text-primary" />
-            <CardTitle>5. Loyalty Points</CardTitle> 
+            <CardTitle>5. 忠誠度點數（Loyalty Points）</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          <p>
-            As you obtain verification codes (simulated purchases), you'll accumulate Loyalty Points! These points can be used for future benefits within the TixQuic ecosystem.
-          </p>
-          <p>
-            You can see your current points balance in the header (top right), next to the theme toggle, when you are logged in.
-          </p>
-           <p className="text-sm text-muted-foreground">
-            The loyalty program is currently in a conceptual phase. More details on rewards and redemption will be available soon.
-          </p>
+          <p>每次成功解鎖驗證碼（模擬購買），你都會獲得一定的點數獎勵！點數可用於未來折抵、活動兌換等功能。</p>
+          <p>點數餘額可於登入後，在右上方帳戶資訊處查看。</p>
+          <p className="text-sm text-muted-foreground">點數系統目前為概念階段，後續將加入更多使用方式。</p>
         </CardContent>
       </Card>
 
       <Card className="shadow-lg">
         <CardHeader>
-            <CardTitle>General Tips</CardTitle>
+          <CardTitle>常見建議</CardTitle>
         </CardHeader>
         <CardContent>
-            <ul className="list-disc list-inside space-y-1">
-                <li>Keep your OpenAI API Key confidential if you use one.</li>
-                <li>For admins: Ensure event details (name, price, image URL, dates) are accurate when managing events.</li>
-                <li>Explore all sections of the app using the sidebar navigation.</li>
-                <li>Use the light/dark mode toggle (moon/sun icon in the header) to suit your preference.</li>
-            </ul>
+          <ul className="list-disc list-inside space-y-1">
+            <li>請妥善保管你的 OpenAI API 金鑰，避免洩漏。</li>
+            <li>管理員請確認新增活動時填寫正確資訊（名稱、價格、圖片、時段）。</li>
+            <li>可透過側邊選單瀏覽所有功能頁面。</li>
+            <li>可使用右上方的日／夜間模式切換調整介面風格。</li>
+          </ul>
         </CardContent>
       </Card>
     </div>
