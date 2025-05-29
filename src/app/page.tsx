@@ -10,6 +10,11 @@ import Image from 'next/image';
 import { collection, getDocs, query, Timestamp, limit, orderBy, where } from 'firebase/firestore'; 
 import { db } from '@/lib/firebase';
 
+import dynamic from 'next/dynamic';
+const GoogleAd = dynamic(() => import('../components/GoogleAd'), { ssr: false });
+
+
+
 interface Event {
   id: string;
   name: string;
@@ -137,6 +142,8 @@ export default function DashboardPage() {
         <meta property="og:description" content="快速、安全、可靠的演唱會門票搶購服務" />
         <meta property="og:site_name" content="TixQuic" />
         <link rel="canonical" href="https://www.tixquic.com/" />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2436395949894310"
+     crossOrigin="anonymous"></script>
       </Head>
 
       <div className="min-h-screen flex flex-col">
@@ -206,6 +213,9 @@ export default function DashboardPage() {
             </div>
             <FeaturedEventList /> 
           </section>
+          {/* 廣告區塊：Featured Event 下方 */}
+          <GoogleAd slot="1594898059" className="my-10" />
+
 
           {/* Features Section */}
           <div className="mt-12 grid md:grid-cols-3 gap-8">

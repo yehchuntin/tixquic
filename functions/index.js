@@ -7,73 +7,140 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-// 現有的 uploadImage 函數
-exports.uploadImage = functions.https.onRequest((req, res) => {
-  cors(req, res, async () => {
-    if (req.method !== 'POST') {
-      return res.status(405).send('Method Not Allowed');
-    }
+// 統一的身份驗證輔助函數
+async function verifyAuthToken(authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Missing or invalid Authorization header');
+  }
+  
+  const idToken = authHeader.split('Bearer ')[1];
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    return decodedToken;
+  } catch (error) {
+    throw new Error('Invalid authentication token');
+  }
+}
 
+// 統一的請求驗證輔助函數
+function validateRequestMethod(req, allowedMethods) {
+  if (!allowedMethods.includes(req.method)) {
+    throw new Error(`Method ${req.method} not allowed. Allowed methods: ${allowedMethods.join(', ')}`);
+  }
+}
+
+// 統一的回應格式輔助函數
+function sendResponse(res, statusCode, data, message = null) {
+  const response = {
+    success: statusCode >= 200 && statusCode < 300,
+    ...(message && { message }),
+    ...(data && { data })
+  };
+  return res.status(statusCode).json(response);
+}
+
+// 統一的錯誤處理輔助函數
+function handleError(res, error, defaultMessage = '系統錯誤') {
+  console.error('Function error:', error);
+  const statusCode = error.statusCode || 500;
+  const message = error.message || defaultMessage;
+  return sendResponse(res, statusCode, null, message);
+}
+
+// 1. 圖片上傳函數
+exports.uploadImage = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
     try {
-      const bucket = admin.storage().bucket();
-      const file = bucket.file(`events/${Date.now()}_${req.body.filename}`);
+      // 驗證請求方法
+      validateRequestMethod(req, ['POST']);
       
-      const stream = file.createWriteStream({
+      // 驗證身份
+      const decodedToken = await verifyAuthToken(req.headers.authorization);
+      
+      // 驗證必要參數
+      const { filename, contentType, file } = req.body;
+      if (!filename || !contentType || !file) {
+        const error = new Error('缺少必要參數：filename, contentType, file');
+        error.statusCode = 400;
+        throw error;
+      }
+      
+      // 上傳圖片
+      const bucket = admin.storage().bucket();
+      const fileRef = bucket.file(`events/${Date.now()}_${filename}`);
+      
+      const stream = fileRef.createWriteStream({
         metadata: {
-          contentType: req.body.contentType,
+          contentType: contentType,
         },
       });
 
-      stream.on('error', (err) => {
-        console.error(err);
-        res.status(500).send(err);
-      });
-
-      stream.on('finish', async () => {
-        const [url] = await file.getSignedUrl({
-          action: 'read',
-          expires: '03-09-2491',
+      return new Promise((resolve, reject) => {
+        stream.on('error', (err) => {
+          console.error('Upload stream error:', err);
+          reject(err);
         });
-        res.status(200).send({ url });
-      });
 
-      stream.end(Buffer.from(req.body.file, 'base64'));
+        stream.on('finish', async () => {
+          try {
+            const [url] = await fileRef.getSignedUrl({
+              action: 'read',
+              expires: '03-09-2491',
+            });
+            resolve(sendResponse(res, 200, { 
+              url,
+              filename,
+              uploadedBy: decodedToken.uid,
+              uploadedAt: new Date().toISOString()
+            }, '圖片上傳成功'));
+          } catch (error) {
+            reject(error);
+          }
+        });
+
+        stream.end(Buffer.from(file, 'base64'));
+      });
+      
     } catch (error) {
-      console.error(error);
-      res.status(500).send(error);
+      return handleError(res, error, '圖片上傳失敗');
     }
   });
 });
 
-// 新增：驗證碼驗證並獲取配置
+// 2. 驗證碼驗證並獲取配置
 exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
-      const { verificationCode } = req.body;
+      // 驗證請求方法
+      validateRequestMethod(req, ['POST']);
       
+      // 驗證身份
+      const decodedToken = await verifyAuthToken(req.headers.authorization);
+      
+      // 驗證必要參數
+      const { verificationCode } = req.body;
       if (!verificationCode) {
-        return res.status(400).json({
-          success: false,
-          message: '請提供驗證碼'
-        });
+        const error = new Error('請提供驗證碼');
+        error.statusCode = 400;
+        throw error;
       }
       
-      console.log('Verifying code:', verificationCode);
+      console.log('Verifying code:', verificationCode, 'for user:', decodedToken.uid);
       
       const db = admin.firestore();
       
       // 1. 查詢驗證碼
       const verificationSnapshot = await db.collection('userEventVerifications')
         .where('verificationCode', '==', verificationCode)
+        .where('userId', '==', decodedToken.uid) // 額外驗證使用者身份
         .limit(1)
         .get();
       
       if (verificationSnapshot.empty) {
-        console.log('Verification code not found:', verificationCode);
-        return res.status(404).json({
-          success: false,
-          message: '無效的驗證碼'
-        });
+        console.log('Verification code not found or unauthorized:', verificationCode);
+        const error = new Error('無效的驗證碼或無權限存取');
+        error.statusCode = 404;
+        throw error;
       }
       
       const verificationDoc = verificationSnapshot.docs[0];
@@ -88,10 +155,9 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
       
       if (!userDoc.exists) {
         console.log('User not found:', verification.userId);
-        return res.status(404).json({
-          success: false,
-          message: '找不到使用者資訊'
-        });
+        const error = new Error('找不到使用者資訊');
+        error.statusCode = 404;
+        throw error;
       }
       
       const userData = userDoc.data();
@@ -99,10 +165,9 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
       // 檢查是否有 OpenAI API Key
       if (!userData.openaiApiKey) {
         console.log('User has no OpenAI API Key');
-        return res.status(400).json({
-          success: false,
-          message: '請先在個人設定中設定 OpenAI API Key'
-        });
+        const error = new Error('請先在個人設定中設定 OpenAI API Key');
+        error.statusCode = 400;
+        throw error;
       }
       
       // 3. 查詢活動資訊
@@ -112,10 +177,9 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
       
       if (!eventDoc.exists) {
         console.log('Event not found:', verification.eventId);
-        return res.status(404).json({
-          success: false,
-          message: '找不到活動資訊'
-        });
+        const error = new Error('找不到活動資訊');
+        error.statusCode = 404;
+        throw error;
       }
       
       const event = eventDoc.data();
@@ -135,13 +199,12 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
       
       if (now > endDate) {
         console.log('Event has ended');
-        return res.status(403).json({
-          success: false,
-          message: '此活動驗證碼已過期'
-        });
+        const error = new Error('此活動驗證碼已過期');
+        error.statusCode = 403;
+        throw error;
       }
       
-      // 5. 記錄使用日誌（選擇性）
+      // 5. 記錄使用日誌
       try {
         await verificationDoc.ref.update({
           lastUsed: admin.firestore.FieldValue.serverTimestamp(),
@@ -161,8 +224,8 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
           actualTicketTime = event.actualTicketTime;
         }
       }
+      
       // 使用者偏好設定（如果沒有就用預設值）
-      // 將原始欄位轉換為前端期待的格式
       const seatList = verification.seatPreferenceOrder
         ? verification.seatPreferenceOrder.split(',').map(s => s.trim()).filter(s => s)
         : ["自動選擇"];
@@ -176,69 +239,72 @@ exports.verifyAndFetchConfig = functions.https.onRequest((req, res) => {
         : 1;
       
       // 7. 組合並返回配置
-      const configuration = {
-        success: true,
+      const configData = {
+        // 活動資訊
+        event: {
+          id: event.id || verification.eventId,
+          name: event.name || '未命名活動',
+          activityUrl: event.activityUrl || '',
+          actualTicketTime: actualTicketTime,
+          venue: event.venue || ''
+        },
+        
+        // 使用者偏好設定
+        preferences: {
+          preferredKeywords: seatList,
+          preferredIndex: sessionIndex,
+          preferredNumbers: ticketCount
+        },
 
-        data: {
-          // 活動資訊
-          event: {
-            id: event.id || verification.eventId,
-            name: event.name || '未命名活動',
-            activityUrl: event.activityUrl || '',
-            actualTicketTime: actualTicketTime,
-            venue: event.venue || ''
-          },
-          
-
-          preferences: {
-            preferredKeywords: seatList,
-            preferredIndex: sessionIndex,
-            preferredNumbers: ticketCount
-          },
-
-          // OpenAI API Key（簡單 base64 編碼）
-          apiKey: Buffer.from(userData.openaiApiKey).toString('base64'),
-          
-          // 其他資訊
-          verificationCode: verificationCode,
-          userId: verification.userId,
-          serverTime: new Date().toISOString()
-        }
+        // OpenAI API Key（簡單 base64 編碼）
+        apiKey: Buffer.from(userData.openaiApiKey).toString('base64'),
+        
+        // 其他資訊
+        verificationCode: verificationCode,
+        userId: verification.userId,
+        serverTime: new Date().toISOString()
       };
       
       console.log('Returning configuration for event:', event.name);
-      return res.json(configuration);
+      return sendResponse(res, 200, configData, '配置獲取成功');
       
     } catch (error) {
-      console.error('Error in verifyAndFetchConfig:', error);
-      return res.status(500).json({
-        success: false,
-        message: '系統錯誤，請稍後再試',
-        error: error.message
-      });
+      return handleError(res, error, '配置獲取失敗');
     }
   });
 });
 
-// 新增：綁定拓元帳號（選擇性功能）
+// 3. 綁定拓元帳號
 exports.bindTixcraftAccount = functions.https.onRequest((req, res) => {
   return cors(req, res, async () => {
     try {
+      // 驗證請求方法
+      validateRequestMethod(req, ['POST']);
+      
+      // 驗證身份
+      const decodedToken = await verifyAuthToken(req.headers.authorization);
+      
+      // 驗證必要參數
       const { verificationCode, tixcraftAccount, deviceId } = req.body;
+      if (!verificationCode || !tixcraftAccount) {
+        const error = new Error('請提供驗證碼和拓元帳號');
+        error.statusCode = 400;
+        throw error;
+      }
       
       const db = admin.firestore();
       
       // 查詢驗證碼
       const verificationSnapshot = await db.collection('userEventVerifications')
         .where('verificationCode', '==', verificationCode)
+        .where('userId', '==', decodedToken.uid) // 額外驗證使用者身份
         .limit(1)
         .get();
       
       if (verificationSnapshot.empty) {
-        return res.status(404).json({
-          success: false,
-          message: '無效的驗證碼'
-        });
+        const error = new Error('無效的驗證碼或無權限存取');
+        error.statusCode = 404;
+        throw error;
       }
       
       const verificationDoc = verificationSnapshot.docs[0];
@@ -247,35 +313,119 @@ exports.bindTixcraftAccount = functions.https.onRequest((req, res) => {
       // 檢查是否已綁定
       if (verification.binding && verification.binding.tixcraftAccount) {
         if (verification.binding.tixcraftAccount !== tixcraftAccount) {
-          return res.status(403).json({
-            success: false,
-            message: '此驗證碼已綁定其他帳號'
-          });
+          const error = new Error('此驗證碼已綁定其他帳號');
+          error.statusCode = 403;
+          throw error;
         }
+        
+        // 如果綁定相同帳號，返回成功但不重複綁定
+        return sendResponse(res, 200, {
+          alreadyBound: true,
+          boundAccount: verification.binding.tixcraftAccount
+        }, '帳號已綁定');
       }
       
       // 更新綁定資訊
       await verificationDoc.ref.update({
         binding: {
           tixcraftAccount: tixcraftAccount,
-          deviceId: deviceId,
+          deviceId: deviceId || null,
           bindDate: admin.firestore.FieldValue.serverTimestamp(),
-          bindIP: req.ip || 'unknown'
+          bindIP: req.ip || 'unknown',
+          boundBy: decodedToken.uid
         }
       });
       
-      return res.json({
-        success: true,
-        message: '綁定成功'
-      });
+      return sendResponse(res, 200, {
+        boundAccount: tixcraftAccount,
+        deviceId: deviceId,
+        bindDate: new Date().toISOString()
+      }, '綁定成功');
       
     } catch (error) {
-      console.error('Error in bindTixcraftAccount:', error);
-      return res.status(500).json({
-        success: false,
-        message: '系統錯誤',
-        error: error.message
-      });
+      return handleError(res, error, '綁定失敗');
+    }
+  });
+});
+
+// 4. 新增：取得使用者的活動列表
+exports.getUserEventVerifications = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    try {
+      // 驗證請求方法
+      validateRequestMethod(req, ['GET']);
+      
+      // 驗證身份
+      const decodedToken = await verifyAuthToken(req.headers.authorization);
+      
+      const db = admin.firestore();
+      
+      // 查詢使用者的驗證碼列表
+      const verificationsSnapshot = await db.collection('userEventVerifications')
+        .where('userId', '==', decodedToken.uid)
+        .orderBy('createdAt', 'desc')
+        .get();
+      
+      const verifications = [];
+      
+      for (const doc of verificationsSnapshot.docs) {
+        const verification = doc.data();
+        
+        // 獲取活動資訊
+        try {
+          const eventDoc = await db.collection('events')
+            .doc(verification.eventId)
+            .get();
+          
+          const event = eventDoc.exists ? eventDoc.data() : null;
+          
+          verifications.push({
+            id: doc.id,
+            verificationCode: verification.verificationCode,
+            eventId: verification.eventId,
+            event: event ? {
+              name: event.name,
+              venue: event.venue,
+              endDate: event.endDate?.toDate?.()?.toISOString() || event.endDate
+            } : null,
+            preferences: {
+              seatPreferenceOrder: verification.seatPreferenceOrder,
+              sessionPreference: verification.sessionPreference,
+              ticketCount: verification.ticketCount
+            },
+            binding: verification.binding || null,
+            usageCount: verification.usageCount || 0,
+            lastUsed: verification.lastUsed?.toDate?.()?.toISOString() || verification.lastUsed,
+            createdAt: verification.createdAt?.toDate?.()?.toISOString() || verification.createdAt
+          });
+        } catch (eventError) {
+          console.log('Error fetching event for verification:', doc.id, eventError);
+          // 即使活動資訊獲取失敗，也保留驗證碼記錄
+          verifications.push({
+            id: doc.id,
+            verificationCode: verification.verificationCode,
+            eventId: verification.eventId,
+            event: null,
+            preferences: {
+              seatPreferenceOrder: verification.seatPreferenceOrder,
+              sessionPreference: verification.sessionPreference,
+              ticketCount: verification.ticketCount
+            },
+            binding: verification.binding || null,
+            usageCount: verification.usageCount || 0,
+            lastUsed: verification.lastUsed?.toDate?.()?.toISOString() || verification.lastUsed,
+            createdAt: verification.createdAt?.toDate?.()?.toISOString() || verification.createdAt
+          });
+        }
+      }
+      
+      return sendResponse(res, 200, {
+        verifications,
+        totalCount: verifications.length
+      }, '活動列表獲取成功');
+      
+    } catch (error) {
+      return handleError(res, error, '活動列表獲取失敗');
     }
   });
 });
