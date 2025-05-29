@@ -290,41 +290,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUserLoyaltyPoints = async (pointsToAdd: number) => {
-    if (!user) {
-      toast({ 
-        title: "錯誤", 
-        description: "您必須先登入才能更新點數", 
-        variant: "destructive" 
-      });
-      return;
-    }
+ // updateUserLoyaltyPoints 函數保持原樣，不需要返回值
+ const updateUserLoyaltyPoints = async (pointsToAdd: number): Promise<void> => {
+  if (!user) {
+    toast({
+      title: "錯誤",
+      description: "您必須先登入才能更新點數",
+      variant: "destructive"
+    });
+    return;
+  }
+  
+  const parsedPointsToAdd = Number(pointsToAdd);
+  
+  if (isNaN(parsedPointsToAdd)) {
+    toast({
+      title: "錯誤",
+      description: "傳入的點數無效",
+      variant: "destructive"
+    });
+    return;
+  }
+  
+  try {
+    const userDocRef = doc(db, "users", user.uid);
     
-    try {
-      const newTotalPoints = loyaltyPoints + pointsToAdd;
-      const userDocRef = doc(db, "users", user.uid);
-      
-      await setDoc(userDocRef, { 
-        loyaltyPoints: newTotalPoints,
-        lastPointsUpdate: new Date().toISOString()
-      }, { merge: true });
-      
-      setLoyaltyPoints(newTotalPoints);
-      
-      toast({
-        title: "點數更新成功",
-        description: `您的忠誠度點數已更新為 ${newTotalPoints} 點`,
-        variant: "default"
-      });
-    } catch (error) {
-      console.error("Error updating loyalty points in Firestore:", error);
-      toast({ 
-        title: "錯誤", 
-        description: "無法更新您的忠誠度點數", 
-        variant: "destructive" 
-      });
-    }
-  };
+    // 🔥 關鍵修正：先從 Firestore 讀取最新點數
+    const userDoc = await getDoc(userDocRef);
+    const currentPoints = userDoc.exists() ? (userDoc.data().loyaltyPoints || 0) : 0;
+    
+    const newTotalPoints = currentPoints + parsedPointsToAdd;
+    
+    console.log(`[updateUserLoyaltyPoints] 原始點數: ${currentPoints}，變動: ${parsedPointsToAdd}，結果: ${newTotalPoints}`);
+    
+    // 更新 Firestore
+    await setDoc(userDocRef, {
+      loyaltyPoints: newTotalPoints,
+      lastPointsUpdate: new Date().toISOString()
+    }, { merge: true });
+    
+    // 更新本地狀態
+    setLoyaltyPoints(newTotalPoints);
+    
+    toast({
+      title: "點數更新成功",
+      description: `您的忠誠度點數已更新為 ${newTotalPoints} 點`,
+      variant: "default"
+    });
+  } catch (error) {
+    console.error("Error updating loyalty points in Firestore:", error);
+    toast({
+      title: "錯誤",
+      description: "無法更新您的忠誠度點數",
+      variant: "destructive"
+    });
+  }
+};
+  
 
   const value: AuthContextType = {
     user,

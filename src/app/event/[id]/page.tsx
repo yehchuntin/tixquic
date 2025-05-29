@@ -235,10 +235,43 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   }) => {
     if (!user || !event || !statusInfo || !statusInfo.isActionable) return;
 
+    // 檢查點數是否足夠
+    if (paymentData.pointsUsed > (loyaltyPoints || 0)) {
+      toast({
+        title: "點數不足",
+        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${paymentData.pointsUsed} 點`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGeneratingCode(true);
     
     try {
-      // 先處理購買邏輯（扣點數、記錄訂單等）
+      // 創建驗證碼（使用正確格式）
+      const verificationCode = generateVerificationCode(event.prefix || "");
+      
+      console.log(`購買資訊: 使用點數 ${paymentData.pointsUsed}, 最終價格 ${paymentData.finalPrice}, 付款方式 ${paymentData.paymentMethod}`);
+      
+      let currentUserPoints = loyaltyPoints || 0;
+      
+      // 先扣除使用的點數
+      if (paymentData.pointsUsed > 0) {
+        console.log(`準備扣除 ${paymentData.pointsUsed} 點數`);
+        if (updateUserLoyaltyPoints) {
+          // 等待點數更新完成
+          await updateUserLoyaltyPoints(-paymentData.pointsUsed);
+          
+          // 等待更長時間讓狀態和資料庫都更新完成
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          console.log(`成功扣除 ${paymentData.pointsUsed} 點數`);
+        } else {
+          throw new Error("updateUserLoyaltyPoints function not available");
+        }
+      }
+      
+      // 先處理購買邏輯（記錄訂單等）
       const orderRef = await addDoc(collection(db, "users", user.uid, "orders"), {
         eventId: event.id,
         eventName: event.name,
@@ -246,42 +279,36 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         pricePaid: paymentData.finalPrice,
         pointsRedeemed: paymentData.pointsUsed,
         paymentMethod: paymentData.paymentMethod,
-        ticketCode: `TIX-${generateVerificationCode()}`,
+        ticketCode: verificationCode,
         status: "verified",
-        preferences: {
-          seatPreferences: seatPreferences || "自動選擇",
-          sessionPreference: sessionPreference,
-          ticketCount: ticketCount
-        }
+        verificationCode: verificationCode
       });
 
       // 更新活動售票數量
       await updateDoc(doc(db, "events", eventId), { 
-        ticketsSold: (event.ticketsSold || 0) + parseInt(ticketCount) 
+        ticketsSold: (event.ticketsSold || 0) + 1
       });
 
-      // 扣除兌換的點數
-      if (paymentData.pointsUsed > 0 && updateUserLoyaltyPoints) {
-        await updateUserLoyaltyPoints(-paymentData.pointsUsed);
-      }
-      
-      // 獎勵購買點數 - 直接使用 pointsAwarded
+      // 再加入獎勵點數
       const pointsAwardedForPurchase = event.pointsAwarded || 0;
-      if (pointsAwardedForPurchase > 0 && updateUserLoyaltyPoints) {
-        await updateUserLoyaltyPoints(pointsAwardedForPurchase);
+      if (pointsAwardedForPurchase > 0) {
+        console.log(`準備獎勵 ${pointsAwardedForPurchase} 點數`);
+        if (updateUserLoyaltyPoints) {
+          await updateUserLoyaltyPoints(pointsAwardedForPurchase);
+          console.log(`成功獎勵 ${pointsAwardedForPurchase} 點數`);
+        }
       }
 
-      // 創建驗證碼記錄到 Firestore
-      const verificationCode = generateVerificationCode(event.prefix || "");
+      // 創建驗證碼記錄到 Firestore（預設偏好設定）
       const verificationDocData = {
         verificationCode,
         userId: user.uid,
         eventId: event.id,
         eventName: event.name,
         orderId: orderRef.id,
-        seatPreferenceOrder: seatPreferences || "自動選擇",
-        sessionPreference: parseInt(sessionPreference),
-        ticketCount: parseInt(ticketCount),
+        seatPreferenceOrder: "自動選擇", // 預設值
+        sessionPreference: 1, // 預設第一場次
+        ticketCount: 1, // 預設1張票
         createdAt: Timestamp.now(),
         purchaseDate: Timestamp.now(),
         lastUsed: null,
@@ -291,7 +318,37 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         status: 'active'
       };
 
-      await addDoc(collection(db, "userEventVerifications"), verificationDocData);
+      console.log('準備創建驗證碼文件:', verificationDocData);
+      
+      try {
+        const verificationDocRef = await addDoc(collection(db, "userEventVerifications"), verificationDocData);
+        console.log('驗證碼文件創建成功，ID:', verificationDocRef.id);
+      } catch (verificationError: unknown) {
+        let errorMessage = "驗證碼創建失敗";
+      
+        if (verificationError instanceof Error) {
+          console.error('創建驗證碼文件失敗:', verificationError);
+          const errorWithCode = verificationError as { code?: string };
+      
+          console.error('錯誤詳情:', {
+            code: errorWithCode.code,
+            message: verificationError.message,
+            stack: verificationError.stack
+          });
+      
+          if (errorWithCode.code === 'permission-denied') {
+            errorMessage = "權限不足，無法創建驗證碼。請聯繫管理員。";
+          } else if (errorWithCode.code === 'network-request-failed') {
+            errorMessage = "網路連線失敗，請檢查網路後重試。";
+          }
+      
+        } else {
+          console.error('未知錯誤', verificationError);
+        }
+      
+        throw new Error(errorMessage);
+      }
+      
 
       // 設定驗證碼資料用於顯示
       setVerificationCodeData({
@@ -299,9 +356,9 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         eventId: event.id,
         eventName: event.name,
         userId: user.uid,
-        seatPreferenceOrder: seatPreferences || "自動選擇",
-        sessionPreference: parseInt(sessionPreference),
-        ticketCount: parseInt(ticketCount),
+        seatPreferenceOrder: "自動選擇",
+        sessionPreference: 1,
+        ticketCount: 1,
         createdAt: new Date().toISOString()
       });
 
@@ -350,7 +407,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       
       toast({ 
         title: "購買成功！", 
-        description: `已為 ${event.name} 生成驗證碼。您獲得了 ${pointsAwardedForPurchase} 忠誠度點數。`,
+        description: `已為 ${event.name} 生成驗證碼。${paymentData.pointsUsed > 0 ? `已扣除 ${paymentData.pointsUsed} 點數，` : ''}您獲得了 ${pointsAwardedForPurchase} 忠誠度點數。`,
         variant: "default"
       });
 
@@ -384,6 +441,16 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       });
       return;
     }
+
+    // 檢查點數是否足夠
+    if (points > (loyaltyPoints || 0)) {
+      toast({
+        title: "點數不足",
+        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${points} 點`,
+        variant: "destructive"
+      });
+      return;
+    }
     
     const finalPrice = Math.max(0, event.price - points);
     handleGenerateVerificationCode({
@@ -397,6 +464,14 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   const handleCardPayment = () => {
     if (!event) return;
     
+    // TODO: 未來整合第三方支付
+    // 現在暫時模擬付款成功
+    toast({
+      title: "模擬付款",
+      description: "目前為測試模式，未來將整合第三方支付服務",
+      variant: "default"
+    });
+    
     handleGenerateVerificationCode({
       pointsUsed: 0,
       finalPrice: event.price,
@@ -407,6 +482,16 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   // 更新偏好設定
   const handleUpdatePreferences = async () => {
     if (!user || !userVerificationCode) return;
+    
+    // 檢查座位偏好是否有填寫
+    if (!editSeatPreferences.trim()) {
+      toast({
+        title: "請填寫座位偏好",
+        description: "座位偏好為必填項目",
+        variant: "destructive"
+      });
+      return;
+    }
     
     const remainingModifications = (userVerificationCode.maxModifications || 5) - (userVerificationCode.modificationCount || 0);
     if (remainingModifications <= 0) {
@@ -437,7 +522,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         const verificationDoc = verificationsSnap.docs[0];
         
         await firestoreUpdateDoc(verificationDoc.ref, {
-          seatPreferenceOrder: editSeatPreferences || "自動選擇",
+          seatPreferenceOrder: editSeatPreferences.trim(),
           sessionPreference: parseInt(editSessionPreference),
           ticketCount: parseInt(editTicketCount),
           modificationCount: (userVerificationCode.modificationCount || 0) + 1,
@@ -447,7 +532,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         // 更新本地狀態
         setUserVerificationCode({
           ...userVerificationCode,
-          seatPreferenceOrder: editSeatPreferences || "自動選擇",
+          seatPreferenceOrder: editSeatPreferences.trim(),
           sessionPreference: parseInt(editSessionPreference),
           ticketCount: parseInt(editTicketCount),
           modificationCount: (userVerificationCode.modificationCount || 0) + 1
@@ -567,6 +652,18 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
               </div>
             </div>
           </div>
+          {/* ✅ 新增這個按鈕區塊 */}
+          <Button
+            onClick={() => {
+              setEditSeatPreferences(userVerificationCode.seatPreferenceOrder || "");
+              setEditSessionPreference(userVerificationCode.sessionPreference?.toString() || "1");
+              setEditTicketCount(userVerificationCode.ticketCount?.toString() || "1");
+              setShowEditPreferences(true);
+            }}
+            className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
+          >
+            修改偏好設定
+          </Button>
           
           {event.activityUrl && (
             <Button
@@ -586,7 +683,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         <Button 
           size="lg" 
           className="w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg bg-purple-600 hover:bg-purple-700 text-white" 
-          onClick={() => setShowVerificationDialog(true)}
+          onClick={() => setShowRedeemDialog(true)} // 直接進入付款選擇
           disabled={isGeneratingCode || loadingUserStatus}
         >
           <ShoppingCart className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -767,83 +864,20 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         </div>
       </div>
 
-      {/* 購票偏好設定對話框 */}
-      <Dialog open={showVerificationDialog} onOpenChange={setShowVerificationDialog}>
-        <DialogContent className="bg-gray-900 border-gray-700 max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-gray-100">購票偏好設定</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              設定您的購票偏好，系統將根據這些設定為您生成專屬的驗證碼
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="seatPreferences" className="text-gray-300">座位偏好（用逗號分隔）</Label>
-              <Textarea
-                id="seatPreferences"
-                placeholder="例如：搖滾區, VIP區, 一樓前排"
-                value={seatPreferences}
-                onChange={(e) => setSeatPreferences(e.target.value)}
-                className="bg-gray-800 text-gray-200 border-gray-700 focus:ring-purple-500"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="sessionPreference" className="text-gray-300">場次偏好</Label>
-                <Select value={sessionPreference} onValueChange={setSessionPreference}>
-                  <SelectTrigger className="bg-gray-800 text-gray-200 border-gray-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    <SelectItem value="1">第一場次</SelectItem>
-                    <SelectItem value="2">第二場次</SelectItem>
-                    <SelectItem value="3">第三場次</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ticketCount" className="text-gray-300">票券數量</Label>
-                <Select value={ticketCount} onValueChange={setTicketCount}>
-                  <SelectTrigger className="bg-gray-800 text-gray-200 border-gray-700">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
-                    <SelectItem value="1">1 張</SelectItem>
-                    <SelectItem value="2">2 張</SelectItem>
-                    <SelectItem value="3">3 張</SelectItem>
-                    <SelectItem value="4">4 張</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowVerificationDialog(false)}
-              className="text-gray-300 border-gray-700 hover:bg-gray-800"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={() => setShowRedeemDialog(true)}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              下一步：選擇付款方式
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* 購票偏好設定對話框 - 移除，因為改為購買後設定 */}
 
-      {/* 點數兌換對話框 */}
+      {/* 付款方式選擇對話框 */}
       {user && event && (
         <AlertDialog open={showRedeemDialog} onOpenChange={setShowRedeemDialog}>
           <AlertDialogContent className="bg-gray-900 border-gray-700 max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-gray-100">選擇付款方式</AlertDialogTitle>
               <AlertDialogDescription className="text-gray-400">
-                您有 {loyaltyPoints || 0} 忠誠度點數。票價：${event.price?.toFixed(2) || '0.00'}
+                您有 {loyaltyPoints || 0} 忠誠度點數。票價：${event?.price?.toFixed(2) || '0.00'}
+                <br />
+                <span className="text-sm text-yellow-400">
+                  購買後可設定座位偏好等選項
+                </span>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="grid gap-4 py-4">
@@ -940,8 +974,17 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
                   if (paymentMethod === 'card') {
                     handleCardPayment();
                   } else if (paymentMethod === 'points') {
+                    if ((loyaltyPoints || 0) < (event?.price || 0)) {
+                      toast({
+                        title: "點數不足",
+                        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${event?.price || 0} 點`,
+                        variant: "destructive"
+                      });
+                      return;
+                    }
+                    if (!event) return; // 額外的 null 檢查
                     handleGenerateVerificationCode({
-                      pointsUsed: event?.price || 0,
+                      pointsUsed: event.price,
                       finalPrice: 0,
                       paymentMethod: 'points'
                     });
@@ -963,27 +1006,55 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       <Dialog open={showEditPreferences} onOpenChange={setShowEditPreferences}>
         <DialogContent className="bg-gray-900 border-gray-700 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-gray-100">修改偏好設定</DialogTitle>
-            <DialogDescription className="text-gray-400">
-              剩餘修改次數：{userVerificationCode ? ((userVerificationCode.maxModifications || 5) - (userVerificationCode.modificationCount || 0)) : 0} 次
-            </DialogDescription>
+            <DialogTitle className="text-gray-100">設定偏好選項</DialogTitle>
           </DialogHeader>
+
+          {/* ✅ 將說明改用 div 包住，不再放進 DialogDescription 造成 <p> 裡面有 <div> */}
+          <div className="text-gray-400 space-y-1 mb-4 text-sm">
+            <p>
+              剩餘修改次數：
+              <span className="text-yellow-400 font-semibold">
+                {userVerificationCode
+                  ? (userVerificationCode.maxModifications || 5) -
+                    (userVerificationCode.modificationCount || 0)
+                  : 0}{" "}
+                次
+              </span>
+            </p>
+            <p className="text-xs text-gray-500">
+              修改後將無法復原，請謹慎設定
+            </p>
+          </div>
+
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="editSeatPreferences" className="text-gray-300">座位偏好（用逗號分隔）</Label>
-              <Textarea
-                id="editSeatPreferences"
-                placeholder="例如：搖滾區, VIP區, 一樓前排"
-                value={editSeatPreferences}
-                onChange={(e) => setEditSeatPreferences(e.target.value)}
-                className="bg-gray-800 text-gray-200 border-gray-700"
-                rows={3}
-              />
+              <Label htmlFor="editSeatPreferences" className="text-gray-300">
+                座位偏好順序 <span className="text-red-400">*</span>
+              </Label>
+              <div className="space-y-1">
+                <Textarea
+                  id="editSeatPreferences"
+                  placeholder="請用逗點分隔，例如：搖滾區, VIP區, 一樓前排"
+                  value={editSeatPreferences}
+                  onChange={(e) => setEditSeatPreferences(e.target.value)}
+                  className="bg-gray-800 text-gray-200 border-gray-700"
+                  rows={3}
+                />
+                <p className="text-xs text-gray-500">
+                  💡 系統會按照您輸入的順序優先選擇座位區域
+                </p>
+              </div>
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="editSessionPreference" className="text-gray-300">場次偏好</Label>
-                <Select value={editSessionPreference} onValueChange={setEditSessionPreference}>
+                <Label htmlFor="editSessionPreference" className="text-gray-300">
+                  場次偏好
+                </Label>
+                <Select
+                  value={editSessionPreference}
+                  onValueChange={setEditSessionPreference}
+                >
                   <SelectTrigger className="bg-gray-800 text-gray-200 border-gray-700">
                     <SelectValue />
                   </SelectTrigger>
@@ -994,8 +1065,11 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="editTicketCount" className="text-gray-300">票券數量</Label>
+                <Label htmlFor="editTicketCount" className="text-gray-300">
+                  票券數量
+                </Label>
                 <Select value={editTicketCount} onValueChange={setEditTicketCount}>
                   <SelectTrigger className="bg-gray-800 text-gray-200 border-gray-700">
                     <SelectValue />
@@ -1009,7 +1083,17 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
                 </Select>
               </div>
             </div>
+
+            <div className="bg-blue-900/20 border border-blue-700 p-3 rounded-lg">
+              <p className="text-blue-400 text-sm font-semibold">📋 設定說明：</p>
+              <ul className="text-blue-300 text-xs mt-1 space-y-1 ml-4 list-disc">
+                <li>座位偏好會按順序優先選擇</li>
+                <li>場次偏好適用於多場次活動</li>
+                <li>票券數量影響搶票策略</li>
+              </ul>
+            </div>
           </div>
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -1020,7 +1104,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
             </Button>
             <Button
               onClick={handleUpdatePreferences}
-              disabled={isUpdatingPreferences}
+              disabled={isUpdatingPreferences || !editSeatPreferences.trim()}
               className="bg-purple-600 hover:bg-purple-700 text-white"
             >
               {isUpdatingPreferences ? "更新中..." : "確認修改"}
@@ -1028,6 +1112,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* 驗證碼結果對話框 */}
       <Dialog open={showVerificationResult} onOpenChange={setShowVerificationResult}>
@@ -1038,7 +1123,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
               <DialogTitle className="text-gray-100 text-xl">驗證碼生成成功！</DialogTitle>
             </div>
             <DialogDescription className="text-gray-400">
-              請保存您的專屬驗證碼，並在搶票軟體中使用
+              請保存您的專屬驗證碼，並可在下方設定偏好選項
             </DialogDescription>
           </DialogHeader>
           
@@ -1073,6 +1158,12 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
                 </div>
               </div>
               
+              <div className="bg-yellow-900/20 border border-yellow-700 p-3 rounded-lg">
+                <p className="text-yellow-400 text-sm">
+                  💡 您可以在驗證碼區域設定座位偏好、場次偏好等選項（最多可修改5次）
+                </p>
+              </div>
+              
               {event?.activityUrl && (
                 <div className="bg-blue-900/20 border border-blue-700 p-4 rounded-lg">
                   <Label className="text-blue-400 font-semibold">售票網址</Label>
@@ -1092,7 +1183,10 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
             </Button>
             {event?.activityUrl && (
               <Button
-                onClick={() => window.open(event.activityUrl, '_blank')}
+                onClick={() => {
+                  window.open(event.activityUrl, '_blank');
+                  setShowVerificationResult(false);
+                }}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
                 前往售票網站
