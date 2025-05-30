@@ -135,15 +135,29 @@ export default function DashboardPage() {
   return (
     <>
       <Head>
-        <title>TixQuic 拓元搶票助理 - 快速安全的演唱會購票平台</title>
+        <title>TixQuic 拓元搶票助理 - AI 驅動演唱會購票神器</title>
         <meta name="description" content="TixQuic 專業搶票助理，整合 OpenAI 視覺辨識技術，毫秒級破解驗證碼。協助您在拓元系統快速搶購熱門演唱會門票，AI 智慧讓搶票成功率大幅提升。" />
         <meta name="keywords" content="搶票助理,拓元,演唱會門票,快速搶票,安全購票,TixQuic,拓元系統,演唱會搶票,門票代購,購票技巧,AI驗證碼辨識,OpenAI,人工智慧搶票" />
         <meta property="og:title" content="TixQuic - 您的專業搶票助理" />
-        <meta property="og:description" content="快速、安全、可靠的演唱會門票搶購服務" />
-        <meta property="og:site_name" content="TixQuic" />
+        <meta property="og:description" content="協助你快速破解驗證碼、搶購拓元系統熱門演唱會門票，整合 OpenAI 技術與使用教學，一站式解決方案。" />
+        <meta property="og:site_name" content="TixQuic 搶票助理" />
         <link rel="canonical" href="https://www.tixquic.com/" />
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2436395949894310"
      crossOrigin="anonymous"></script>
+        <link rel="icon" href="/tixquic_logo_112x112.png" type="image/png" />
+
+        <script type="application/ld+json">
+        {`
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "name": "TixQuic 搶票助理",
+          "url": "https://www.tixquic.com",
+          "logo": "https://www.tixquic.com/tixquic_logo_112x112.png"
+        }
+        `}
+        </script>
+
       </Head>
 
       <div className="min-h-screen flex flex-col">

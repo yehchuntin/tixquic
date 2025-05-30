@@ -1,11 +1,148 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const functions = require('firebase-functions');// 匯入 Firebase Functions 的模組
+const admin = require('firebase-admin');// 匯入 Firebase Admin SDK
 const cors = require('cors')({ origin: true });
+const { Storage } = require('@google-cloud/storage');
+
 
 // 檢查是否已經初始化，避免重複初始化
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+// 匯入 V2 Firestore 與 Scheduler 的觸發方式
+const db = admin.firestore();
+const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+
+// ✅ 1. generateSitemap（當 Firestore 中的 events 資料變更時，自動更新 sitemap.xml）
+exports.generateSitemap = onDocumentWritten(
+  {
+    document: "events/{eventId}",
+    region: "us-central1",
+  },
+  async (event) => {
+    // 取得所有活動
+    const snapshot = await db.collection("events").get();
+    const now = new Date();
+    // 建立固定的靜態頁面 URL
+    const urls = [
+      "https://www.tixquic.com/",
+      "https://www.tixquic.com/how-to-use",
+      "https://www.tixquic.com/download",
+      "https://www.tixquic.com/settings",
+      "https://www.tixquic.com/events"
+    ];
+
+    // 加入未過期的活動頁面 URL
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const endDate = data.endDate?.toDate?.() || new Date(0);
+      if (endDate > now) {
+        urls.push(`https://www.tixquic.com/event/${doc.id}`);
+      }
+    });
+
+     // 產生 sitemap.xml 格式內容（無 lastmod）
+    const sitemapContent = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      urls.map(url => `  <url><loc>${url}</loc></url>`).join("\n") +
+      "\n</urlset>";
+
+    // 將 sitemap.xml 存入 Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file("sitemaps/sitemap.xml");
+
+    await file.save(sitemapContent, {
+      metadata: { contentType: "application/xml" },
+      public: true,
+    });
+
+    console.log("✅ Sitemap updated:", urls.length, "URLs");
+  }
+);
+
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
+// ✅ 2. refreshSitemapDaily（每天自動執行，定時刷新 sitemap.xml，加入 <lastmod>）
+exports.refreshSitemapDaily = onSchedule(
+  {
+    schedule: "every 24 hours",//每一天刷新一次sitemap
+    region: "us-central1",
+    timeZone: "Asia/Taipei",
+  },
+  async () => {
+    // 取得所有活動
+    const snapshot = await db.collection("events").get();
+    const now = new Date();
+
+     // 建立包含 lastmod 的靜態頁面
+    const urls = [
+      {
+        loc: "https://www.tixquic.com/",
+        lastmod: now.toISOString().split("T")[0]
+      },
+      {
+        loc: "https://www.tixquic.com/events",
+        lastmod: now.toISOString().split("T")[0]
+      },
+      {
+        loc: "https://www.tixquic.com/how-to-use",
+        lastmod: now.toISOString().split("T")[0]
+      },
+      {
+        loc: "https://www.tixquic.com/download",
+        lastmod: now.toISOString().split("T")[0]
+      },
+      {
+        loc: "https://www.tixquic.com/settings",
+        lastmod: now.toISOString().split("T")[0]
+      },
+    ];
+
+    // 加入活動頁面（僅包含未過期活動）
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const endDate = data.endDate?.toDate?.() || new Date(0);
+      if (endDate > now) {
+        urls.push({
+          loc: `https://www.tixquic.com/event/${doc.id}`,
+          lastmod: now.toISOString().split("T")[0]
+        });
+      }
+    });
+    
+    // 建立 sitemap.xml 內容（包含 lastmod）
+    const sitemapContent =
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      urls.map(url =>
+        `  <url>\n    <loc>${url.loc}</loc>\n    <lastmod>${url.lastmod}</lastmod>\n  </url>`
+      ).join("\n") +
+      `\n</urlset>`;
+    
+    // 將 sitemap.xml 存入 Firebase Storage
+    const bucket = admin.storage().bucket();
+    const file = bucket.file("sitemaps/sitemap.xml");
+
+    await file.save(sitemapContent, {
+      metadata: { contentType: "application/xml" },
+      public: true,
+    });
+
+    console.log("✅ Daily sitemap refreshed:", urls.length, "URLs");
+  }
+);
+
+
+// ✅ 3. serveSitemap（當瀏覽器請求 /sitemap.xml 時，從 Firebase Storage 中讀取並回傳）
+exports.serveSitemap = functions.https.onRequest(async (req, res) => {
+  const bucket = admin.storage().bucket();
+  const file = bucket.file("sitemaps/sitemap.xml");
+
+  try {
+    const [contents] = await file.download();
+    res.setHeader("Content-Type", "application/xml");
+    res.status(200).send(contents.toString());
+  } catch (error) {
+    console.error("❌ sitemap.xml 讀取失敗", error);
+    res.status(404).send("Sitemap not found");
+  }
 
 // 統一的身份驗證輔助函數
 async function verifyAuthToken(authHeader) {
@@ -429,3 +566,8 @@ exports.getUserEventVerifications = functions.https.onRequest((req, res) => {
     }
   });
 });
+
+
+
+});
+
