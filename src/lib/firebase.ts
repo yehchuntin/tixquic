@@ -47,6 +47,15 @@ const auth: Auth = getAuth(app);
 const db: Firestore = getFirestore(app);
 const storage: FirebaseStorage = getStorage(app);
 
+import { setPersistence, browserLocalPersistence } from "firebase/auth";
+
+
+// 🔐 確保登入狀態能跨頁維持
+setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error("❌ 設定登入持久性失敗:", error);
+});
+
+
 // 輔助函數：獲取當前使用者的 ID Token
 export const getCurrentUserIdToken = async (): Promise<string | null> => {
   const user = auth.currentUser;
