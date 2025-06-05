@@ -461,22 +461,39 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   };
 
   // 處理信用卡付款
-  const handleCardPayment = () => {
+  const handleCardPayment = async () => {
     if (!event) return;
-    
-    // TODO: 未來整合第三方支付
-    // 現在暫時模擬付款成功
-    toast({
-      title: "模擬付款",
-      description: "目前為測試模式，未來將整合第三方支付服務",
-      variant: "default"
-    });
-    
-    handleGenerateVerificationCode({
-      pointsUsed: 0,
-      finalPrice: event.price,
-      paymentMethod: 'card'
-    });
+
+    const orderId = crypto.randomUUID().replace(/-/g, '').slice(0, 20);
+
+    try {
+      await callAuthenticatedFunction('createEcpayOrder', {
+        orderId,
+        amount: event.price,
+        description: event.name
+      });
+
+      // TODO: 未來整合第三方支付
+      // 現在暫時模擬付款成功
+      toast({
+        title: "模擬付款",
+        description: "目前為測試模式，未來將整合第三方支付服務",
+        variant: "default"
+      });
+
+      handleGenerateVerificationCode({
+        pointsUsed: 0,
+        finalPrice: event.price,
+        paymentMethod: 'card'
+      });
+    } catch (error) {
+      console.error('createEcpayOrder failed', error);
+      toast({
+        title: '付款失敗',
+        description: '無法建立訂單',
+        variant: 'destructive'
+      });
+    }
   };
 
   // 更新偏好設定
