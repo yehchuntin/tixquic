@@ -1145,3 +1145,31 @@ exports.getUserEventVerifications = functions.https.onRequest((req, res) => {
     }
   });
 });
+
+// 建立綠界訂單
+exports.createEcpayOrder = functions.https.onRequest((req, res) => {
+  return cors(req, res, async () => {
+    try {
+      validateRequestMethod(req, ['POST']);
+
+      await verifyAuthToken(req.headers.authorization);
+
+      const { orderId, amount, description } = req.body;
+      if (!orderId || !amount) {
+        const error = new Error('缺少必要參數');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      if (orderId.length > 20) {
+        return sendResponse(res, 400, null, 'orderId length exceeds 20 characters');
+      }
+
+      // 此處應與綠界整合，暫以回傳資料模擬
+      return sendResponse(res, 200, { orderId, amount, description }, 'ECPay order created');
+
+    } catch (error) {
+      return handleError(res, error, '建立訂單失敗');
+    }
+  });
+});
