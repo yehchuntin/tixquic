@@ -8,12 +8,13 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarIcon, MapPinIcon, TicketIcon, StarIcon, DollarSignIcon, AlertTriangle, ArrowLeft, InfoIcon, ShoppingCart, FileTextIcon, LightbulbIcon, CheckCircleIcon, Copy, Eye, EyeOff } from "lucide-react"; 
+import { CalendarIcon, MapPinIcon, TicketIcon, StarIcon, CoinsIcon, AlertTriangle, ArrowLeft, InfoIcon, ShoppingCart, FileTextIcon, LightbulbIcon, CheckCircleIcon, Copy, Eye, EyeOff } from "lucide-react"; 
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -41,7 +42,7 @@ interface TicketEvent {
   actualTicketTime?: Timestamp;
   venue: string;
   description: string;
-  price: number;
+  price: number; // 保持原本的變數名稱，但現在代表點數價格
   totalTickets: number;
   ticketsSold: number;
   imageUrl?: string; 
@@ -109,19 +110,14 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   const [event, setEvent] = useState<TicketEvent | null>(null);
   const [loadingEvent, setLoadingEvent] = useState(true);
   const [statusInfo, setStatusInfo] = useState<{ text: string; badgeClass: string; isActionable: boolean } | null>(null); 
-  const [showRedeemDialog, setShowRedeemDialog] = useState(false);
-  const [pointsToRedeem, setPointsToRedeem] = useState<number | string>("");
+  
+  // 新增：確認購買對話框
+  const [showPurchaseConfirm, setShowPurchaseConfirm] = useState(false);
   
   // 新增：驗證碼相關狀態
-  const [showVerificationDialog, setShowVerificationDialog] = useState(false);
   const [showVerificationResult, setShowVerificationResult] = useState(false);
   const [verificationCodeData, setVerificationCodeData] = useState<VerificationCodeData | null>(null);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
-  
-  // 新增：購票偏好設定
-  const [seatPreferences, setSeatPreferences] = useState<string>("");
-  const [sessionPreference, setSessionPreference] = useState<string>("1");
-  const [ticketCount, setTicketCount] = useState<string>("1");
   
   // 新增：使用者購買狀態
   const [userVerificationCode, setUserVerificationCode] = useState<VerificationCodeData | null>(null);
@@ -134,9 +130,6 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
   const [editSessionPreference, setEditSessionPreference] = useState<string>("1");
   const [editTicketCount, setEditTicketCount] = useState<string>("1");
   const [isUpdatingPreferences, setIsUpdatingPreferences] = useState(false);
-  
-  // 新增：付款方式選擇
-  const [paymentMethod, setPaymentMethod] = useState<'points' | 'card' | 'mixed'>('card');
 
   const { toast } = useToast();
   const { 
@@ -227,19 +220,15 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
     checkUserPurchaseStatus();
   }, [user, eventId]);
 
-  // 生成驗證碼
-  const handleGenerateVerificationCode = async (paymentData: { 
-    pointsUsed: number; 
-    finalPrice: number; 
-    paymentMethod: string 
-  }) => {
+  // 處理點數購買
+  const handlePointsPurchase = async () => {
     if (!user || !event || !statusInfo || !statusInfo.isActionable) return;
 
     // 檢查點數是否足夠
-    if (paymentData.pointsUsed > (loyaltyPoints || 0)) {
+    if ((loyaltyPoints || 0) < event.price) {
       toast({
         title: "點數不足",
-        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${paymentData.pointsUsed} 點`,
+        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${event.price} 點`,
         variant: "destructive"
       });
       return;
@@ -251,24 +240,20 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       // 創建驗證碼（使用正確格式）
       const verificationCode = generateVerificationCode(event.prefix || "");
       
-      console.log(`購買資訊: 使用點數 ${paymentData.pointsUsed}, 最終價格 ${paymentData.finalPrice}, 付款方式 ${paymentData.paymentMethod}`);
+      console.log(`購買資訊: 使用點數 ${event.price}`);
       
-      let currentUserPoints = loyaltyPoints || 0;
-      
-      // 先扣除使用的點數
-      if (paymentData.pointsUsed > 0) {
-        console.log(`準備扣除 ${paymentData.pointsUsed} 點數`);
-        if (updateUserLoyaltyPoints) {
-          // 等待點數更新完成
-          await updateUserLoyaltyPoints(-paymentData.pointsUsed);
-          
-          // 等待更長時間讓狀態和資料庫都更新完成
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          console.log(`成功扣除 ${paymentData.pointsUsed} 點數`);
-        } else {
-          throw new Error("updateUserLoyaltyPoints function not available");
-        }
+      // 扣除點數
+      console.log(`準備扣除 ${event.price} 點數`);
+      if (updateUserLoyaltyPoints) {
+        // 等待點數更新完成
+        await updateUserLoyaltyPoints(-event.price);
+        
+        // 等待更長時間讓狀態和資料庫都更新完成
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log(`成功扣除 ${event.price} 點數`);
+      } else {
+        throw new Error("updateUserLoyaltyPoints function not available");
       }
       
       // 先處理購買邏輯（記錄訂單等）
@@ -276,9 +261,8 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         eventId: event.id,
         eventName: event.name,
         purchaseDate: Timestamp.now(),
-        pricePaid: paymentData.finalPrice,
-        pointsRedeemed: paymentData.pointsUsed,
-        paymentMethod: paymentData.paymentMethod,
+        pointsPaid: event.price,
+        paymentMethod: 'points',
         ticketCode: verificationCode,
         status: "verified",
         verificationCode: verificationCode
@@ -407,7 +391,7 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       
       toast({ 
         title: "購買成功！", 
-        description: `已為 ${event.name} 生成驗證碼。${paymentData.pointsUsed > 0 ? `已扣除 ${paymentData.pointsUsed} 點數，` : ''}您獲得了 ${pointsAwardedForPurchase} 忠誠度點數。`,
+        description: `已為 ${event.name} 生成驗證碼。已扣除 ${event.price} 點數，您獲得了 ${pointsAwardedForPurchase} 忠誠度點數。`,
         variant: "default"
       });
 
@@ -420,63 +404,8 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       });
     } finally {
       setIsGeneratingCode(false);
-      setShowRedeemDialog(false);
-      setShowVerificationDialog(false);
-      setPointsToRedeem("");
+      setShowPurchaseConfirm(false);
     }
-  };
-
-  // 處理點數兌換
-  const handleRedeemPoints = () => {
-    if (!event) return;
-    
-    const points = Number(pointsToRedeem);
-    const maxPointsUsable = Math.min(loyaltyPoints || 0, event.price);
-    
-    if (isNaN(points) || points < 0 || points > maxPointsUsable) {
-      toast({ 
-        title: "無效的點數", 
-        description: `請輸入有效的點數，最多可使用 ${maxPointsUsable} 點`, 
-        variant: "destructive" 
-      });
-      return;
-    }
-
-    // 檢查點數是否足夠
-    if (points > (loyaltyPoints || 0)) {
-      toast({
-        title: "點數不足",
-        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${points} 點`,
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    const finalPrice = Math.max(0, event.price - points);
-    handleGenerateVerificationCode({
-      pointsUsed: points,
-      finalPrice: finalPrice,
-      paymentMethod: points >= event.price ? 'points' : 'mixed'
-    });
-  };
-
-  // 處理信用卡付款
-  const handleCardPayment = () => {
-    if (!event) return;
-    
-    // TODO: 未來整合第三方支付
-    // 現在暫時模擬付款成功
-    toast({
-      title: "模擬付款",
-      description: "目前為測試模式，未來將整合第三方支付服務",
-      variant: "default"
-    });
-    
-    handleGenerateVerificationCode({
-      pointsUsed: 0,
-      finalPrice: event.price,
-      paymentMethod: 'card'
-    });
   };
 
   // 更新偏好設定
@@ -652,7 +581,6 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
               </div>
             </div>
           </div>
-          {/* ✅ 新增這個按鈕區塊 */}
           <Button
             onClick={() => {
               setEditSeatPreferences(userVerificationCode.seatPreferenceOrder || "");
@@ -677,30 +605,47 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
       );
     }
 
-    // 情況2：已登入但未購買 - 顯示付費解鎖按鈕
+    // 情況2：已登入但未購買 - 顯示點數購買按鈕
     if (user && !userVerificationCode) {
+      const hasEnoughPoints = (loyaltyPoints || 0) >= (event?.price || 0);
+      
       return (
         <Button 
           size="lg" 
-          className="w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg bg-purple-600 hover:bg-purple-700 text-white" 
-          onClick={() => setShowRedeemDialog(true)} // 直接進入付款選擇
-          disabled={isGeneratingCode || loadingUserStatus}
+          className={`w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg ${
+            hasEnoughPoints 
+              ? "bg-purple-600 hover:bg-purple-700 text-white" 
+              : "bg-gray-700 text-gray-400 cursor-not-allowed"
+          }`}
+          onClick={() => {
+            if (hasEnoughPoints) {
+              setShowPurchaseConfirm(true);
+            } else {
+              toast({
+                title: "點數不足",
+                description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${event?.price || 0} 點`,
+                variant: "destructive"
+              });
+            }
+          }}
+          disabled={isGeneratingCode || loadingUserStatus || !hasEnoughPoints}
         >
-          <ShoppingCart className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          {isGeneratingCode ? "處理中..." : "付費解鎖驗證碼"}
+          <CoinsIcon className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+          {isGeneratingCode ? "處理中..." : 
+           hasEnoughPoints ? "點數購買驗證碼" : "點數不足"}
         </Button>
       );
     }
 
-    // 情況3：未登入 - 顯示付費解鎖但點擊時警告
+    // 情況3：未登入 - 顯示購買但點擊時警告
     return (
       <Button 
         size="lg" 
         className="w-full h-11 sm:h-12 md:h-14 text-sm sm:text-base md:text-lg bg-purple-600 hover:bg-purple-700 text-white" 
         onClick={handleUnauthorizedPurchase}
       >
-        <ShoppingCart className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-        付費解鎖驗證碼
+        <CoinsIcon className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+        點數購買驗證碼
       </Button>
     );
   };
@@ -838,11 +783,16 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
 
                 <div className="border-t border-gray-700 pt-5">
                   <div className="flex items-center gap-2 md:gap-3">
-                    <DollarSignIcon className="h-7 w-7 md:h-8 md:w-8 text-purple-400" />
+                    <CoinsIcon className="h-7 w-7 md:h-8 md:w-8 text-purple-400" />
                     <span className="text-3xl md:text-4xl font-bold text-purple-400">
-                      ${event?.price?.toFixed(2) || '0.00'}
+                      {event?.price || 0} 點數
                     </span>
                   </div>
+                  {user && (
+                    <div className="mt-2 text-sm text-gray-400">
+                      您目前有 <span className="text-yellow-400 font-semibold">{loyaltyPoints || 0}</span> 點數
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-3">
@@ -864,139 +814,45 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
         </div>
       </div>
 
-      {/* 購票偏好設定對話框 - 移除，因為改為購買後設定 */}
-
-      {/* 付款方式選擇對話框 */}
+      {/* 購買確認對話框 */}
       {user && event && (
-        <AlertDialog open={showRedeemDialog} onOpenChange={setShowRedeemDialog}>
+        <AlertDialog open={showPurchaseConfirm} onOpenChange={setShowPurchaseConfirm}>
           <AlertDialogContent className="bg-gray-900 border-gray-700 max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-gray-100">選擇付款方式</AlertDialogTitle>
-              <AlertDialogDescription className="text-gray-400">
-                您有 {loyaltyPoints || 0} 忠誠度點數。票價：${event?.price?.toFixed(2) || '0.00'}
-                <br />
-                <span className="text-sm text-yellow-400">
-                  購買後可設定座位偏好等選項
-                </span>
+              <AlertDialogTitle className="text-gray-100 flex items-center gap-2">
+                <CoinsIcon className="h-6 w-6 text-purple-400" />
+                確認購買
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="text-gray-400 space-y-2">
+                  <div>
+                    您即將以 <span className="text-purple-400 font-bold">{event.price} 點數</span> 購買：
+                  </div>
+                  <div className="bg-gray-800 p-3 rounded-lg">
+                    <div className="text-gray-200 font-semibold">{event.name}</div>
+                    <div className="text-sm text-gray-400 mt-1">
+                      將獲得專屬驗證碼及 {calculatedPointsEarned} 忠誠度點數
+                    </div>
+                  </div>
+                  <div className="text-sm">
+                    目前點數：<span className="text-yellow-400 font-semibold">{loyaltyPoints || 0}</span> 點
+                    <br />
+                    購買後剩餘：<span className="text-yellow-400 font-semibold">{(loyaltyPoints || 0) - (event.price || 0) + calculatedPointsEarned}</span> 點
+                  </div>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-3">
-                <Label className="text-gray-300">選擇付款方式：</Label>
-                
-                {/* 純信用卡付款 */}
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="card-only"
-                    name="payment"
-                    checked={paymentMethod === 'card'}
-                    onChange={() => setPaymentMethod('card')}
-                    className="text-purple-600"
-                  />
-                  <Label htmlFor="card-only" className="text-gray-300">
-                    信用卡付款 - ${event?.price?.toFixed(2) || '0.00'}
-                  </Label>
-                </div>
-                
-                {/* 混合付款 */}
-                {loyaltyPoints > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        id="mixed"
-                        name="payment"
-                        checked={paymentMethod === 'mixed'}
-                        onChange={() => setPaymentMethod('mixed')}
-                        className="text-purple-600"
-                      />
-                      <Label htmlFor="mixed" className="text-gray-300">
-                        點數 + 信用卡
-                      </Label>
-                    </div>
-                    
-                    {paymentMethod === 'mixed' && (
-                      <div className="ml-6 space-y-2">
-                        <Label htmlFor="points" className="text-gray-300 text-sm">
-                          使用點數 (最多 {Math.min(loyaltyPoints || 0, event?.price || 0)} 點)
-                        </Label>
-                        <Input 
-                          id="points" 
-                          type="number" 
-                          value={pointsToRedeem} 
-                          onChange={(e) => setPointsToRedeem(e.target.value)} 
-                          className="bg-gray-800 text-gray-200 border-gray-700" 
-                          max={Math.min(loyaltyPoints || 0, event?.price || 0)}
-                          min="0"
-                        />
-                        {pointsToRedeem && event && (
-                          <div className="text-sm text-gray-400">
-                            折抵後金額：${Math.max(0, event.price - Number(pointsToRedeem)).toFixed(2)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* 純點數付款 */}
-                {loyaltyPoints >= (event?.price || 0) && (
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      id="points-only"
-                      name="payment"
-                      checked={paymentMethod === 'points'}
-                      onChange={() => {
-                        setPaymentMethod('points');
-                        setPointsToRedeem((event?.price || 0).toString());
-                      }}
-                      className="text-purple-600"
-                    />
-                    <Label htmlFor="points-only" className="text-gray-300">
-                      全額點數付款 - {event?.price || 0} 點
-                    </Label>
-                  </div>
-                )}
-              </div>
-            </div>
             <AlertDialogFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowRedeemDialog(false)}
-                className="text-gray-300 border-gray-700 hover:bg-gray-800"
-              >
+              <AlertDialogCancel className="text-gray-300 border-gray-700 hover:bg-gray-800">
                 取消
-              </Button>
-              <Button 
-                onClick={() => {
-                  if (paymentMethod === 'card') {
-                    handleCardPayment();
-                  } else if (paymentMethod === 'points') {
-                    if ((loyaltyPoints || 0) < (event?.price || 0)) {
-                      toast({
-                        title: "點數不足",
-                        description: `您的點數不足，目前有 ${loyaltyPoints || 0} 點，需要 ${event?.price || 0} 點`,
-                        variant: "destructive"
-                      });
-                      return;
-                    }
-                    if (!event) return; // 額外的 null 檢查
-                    handleGenerateVerificationCode({
-                      pointsUsed: event.price,
-                      finalPrice: 0,
-                      paymentMethod: 'points'
-                    });
-                  } else {
-                    handleRedeemPoints();
-                  }
-                }}
-                disabled={isGeneratingCode || (paymentMethod === 'mixed' && (!pointsToRedeem || Number(pointsToRedeem) <= 0))}
+              </AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={handlePointsPurchase}
+                disabled={isGeneratingCode}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
-                {isGeneratingCode ? "處理中..." : "確認付款"}
-              </Button>
+                {isGeneratingCode ? "處理中..." : "確認購買"}
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -1009,7 +865,6 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
             <DialogTitle className="text-gray-100">設定偏好選項</DialogTitle>
           </DialogHeader>
 
-          {/* ✅ 將說明改用 div 包住，不再放進 DialogDescription 造成 <p> 裡面有 <div> */}
           <div className="text-gray-400 space-y-1 mb-4 text-sm">
             <p>
               剩餘修改次數：
@@ -1112,7 +967,6 @@ export default function EventDetailPage({ params: routePassedParams }: EventDeta
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
 
       {/* 驗證碼結果對話框 */}
       <Dialog open={showVerificationResult} onOpenChange={setShowVerificationResult}>

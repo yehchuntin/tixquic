@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Settings as SettingsIcon,
   Download as DownloadIcon, // Renamed to avoid conflict
+  ShoppingCart, // Added ShoppingCart icon
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Timestamp } from "firebase/firestore"; // Import Timestamp
@@ -26,6 +27,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/",
     icon: LayoutDashboard,
     tooltip: "Dashboard",
+  },
+  {
+    title: "商城", // Added Mall
+    href: "/mall",
+    icon: ShoppingCart,
+    tooltip: "點數商城",
   },
   {
     title: "How to Use",
@@ -60,7 +67,7 @@ export interface TicketEvent {
   venue: string;
   onSaleDate: string | any; // 可能是 string 或 Timestamp
   endDate: string | any;    // 可能是 string 或 Timestamp
-  price: number;
+  price: number; // This will now represent points
   pointsAwarded?: number;
   imageUrl?: string;
   activityUrl?: string;
@@ -87,7 +94,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     venue: "Stadium Arena",
     onSaleDate: getRelativeDate(-10), // On sale 10 days ago
     endDate: getRelativeDate(5), // Ends in 5 days
-    price: 75.00,
+    price: 7500, // Representing points
     pointsAwarded: 100,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Experience the titans of rock live in concert. A night to remember!",
@@ -99,7 +106,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     venue: "Green Park",
     onSaleDate: getRelativeDate(7), // On sale in 7 days (Upcoming)
     endDate: getRelativeDate(14), // Ends in 14 days
-    price: 45.50,
+    price: 4550, // Representing points
     pointsAwarded: 50,
     imageUrl: "https://placehold.co/600x400.png",
     description: "Discover the best new indie bands at this year's Indie Fest.",
@@ -111,7 +118,7 @@ export const MOCK_EVENTS: TicketEvent[] = [
     venue: "The Blue Note",
     onSaleDate: getRelativeDate(-30), // On sale 30 days ago
     endDate: getRelativeDate(-5), // Ended 5 days ago (Past)
-    price: 60.00,
+    price: 6000, // Representing points
     pointsAwarded: 75,
     imageUrl: "https://placehold.co/600x400.png",
     description: "An evening of smooth jazz.",

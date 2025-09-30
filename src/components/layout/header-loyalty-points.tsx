@@ -15,7 +15,8 @@ export function HeaderLoyaltyPoints() {
 
   return (
     <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
-      <Link href="/how-to-use#loyalty-info" aria-label={`You have ${loyaltyPoints} loyalty points. Click to learn more.`}>
+      {/* Changed Link href to /mall */}
+      <Link href="/mall" aria-label={`You have ${loyaltyPoints} loyalty points. Click to visit the mall.`}>
         <Star className="mr-2 h-4 w-4 text-primary fill-primary/20" />
         <span className="font-medium">{loyaltyPoints}</span>
         <span className="sr-only">Loyalty Points</span>

@@ -13,30 +13,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// // 驗證必要的環境變數
-// const requiredEnvVars = [
-//   'NEXT_PUBLIC_FIREBASE_API_KEY',
-//   'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-//   'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-//   'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-//   'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-//   'NEXT_PUBLIC_FIREBASE_APP_ID'
-// ];
 
-// const missingEnvVars = requiredEnvVars.filter(
-//   envVar => !process.env[envVar]
-// );
-
-// if (missingEnvVars.length > 0) {
-//   throw new Error(
-//     `Missing required Firebase environment variables: ${missingEnvVars.join(', ')}`
-//   );
-// }
 
 // Firebase App 初始化
 let app: FirebaseApp;
 
 if (getApps().length === 0) {
+  console.log('🔥 firebaseConfig:', {
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  });
+  
   app = initializeApp(firebaseConfig);
 } else {
   app = getApp();
